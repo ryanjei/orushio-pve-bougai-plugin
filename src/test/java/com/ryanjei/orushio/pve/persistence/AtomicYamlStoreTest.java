@@ -22,6 +22,26 @@ class AtomicYamlStoreTest {
         Files.writeString(path, "broken", StandardCharsets.UTF_8);
         assertEquals("8765", store.read().orElseThrow().get("port"));
         assertEquals("8765", store.read().orElseThrow().get("port"));
+        assertEquals("8765", new AtomicYamlStore(path.resolveSibling("config.yml.bak")).read().orElseThrow().get("port"));
+        Files.writeString(path, "broken-again", StandardCharsets.UTF_8);
+        assertEquals("8765", store.read().orElseThrow().get("port"));
+        assertFalse(Files.readString(path.resolveSibling("config.yml.bak")).contains("broken"));
+    }
+    @Test void 既存の未知schemaへの保存を一切変更せず拒否する() throws Exception {
+        Path path = temp.resolve("config.yml"); Path backup = temp.resolve("config.yml.bak");
+        Files.writeString(path, "schemaVersion: \"99\"\nport: \"9999\"\n");
+        Files.writeString(backup, "schemaVersion: \"99\"\nport: \"9998\"\n");
+        String before = Files.readString(path), backupBefore = Files.readString(backup);
+        assertThrows(RepositoryException.class, () -> new AtomicYamlStore(path).write(values("8765")));
+        assertEquals(before, Files.readString(path)); assertEquals(backupBefore, Files.readString(backup));
+        assertFalse(Files.exists(temp.resolve("config.yml.tmp")));
+    }
+    @Test void 現行とバックアップが破損していれば安全に失敗する() throws Exception {
+        Path path=temp.resolve("config.yml"); Files.writeString(path,"broken"); Files.writeString(temp.resolve("config.yml.bak"),"also-broken");
+        assertThrows(RepositoryException.class, () -> new AtomicYamlStore(path).read());
+    }
+    @Test void 不正な書込みschemaはRepositoryErrorになる() {
+        assertThrows(RepositoryException.class, () -> new AtomicYamlStore(temp.resolve("x.yml")).write(Map.of("schemaVersion","invalid")));
     }
     @Test void 未知の新しいschemaはバックアップで上書きしない() throws Exception {
         Path path = temp.resolve("config.yml"); AtomicYamlStore store = new AtomicYamlStore(path);

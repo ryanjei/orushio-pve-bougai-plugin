@@ -1,127 +1,35 @@
 package com.ryanjei.orushio.pve.http;
 
-import com.ryanjei.orushio.pve.application.GameApplicationService;
-import com.ryanjei.orushio.pve.application.OnlinePlayerView;
-import com.ryanjei.orushio.pve.application.PlayerQuery;
-import com.ryanjei.orushio.pve.domain.DomainException;
-import com.ryanjei.orushio.pve.domain.GameSession;
+import com.ryanjei.orushio.pve.application.*;
+import com.ryanjei.orushio.pve.domain.*;
+import com.ryanjei.orushio.pve.logging.AuditSink;
 import com.ryanjei.orushio.pve.security.AuthService;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
+import com.sun.net.httpserver.*;
 import java.io.IOException;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
+import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.function.Supplier;
-import java.util.function.Consumer;
+import java.util.*;
+import java.util.concurrent.*;
 
 public final class AdminHttpServer implements AutoCloseable {
-    private static final String COOKIE = "orushio_session";
-    private final HttpServer server;
-    private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
-    private final GameApplicationService games;
-    private final PlayerQuery players;
-    private final AuthService auth;
-    private final Diagnostics diagnostics;
-    private final Consumer<String> operationLog;
-    private final String expectedOrigin;
-    private final String expectedHost;
-
-    public AdminHttpServer(InetAddress bind, int port, GameApplicationService games, PlayerQuery players, AuthService auth, Diagnostics diagnostics) throws IOException {
-        this(bind, port, games, players, auth, diagnostics, ignored -> {});
+    private static final String COOKIE="orushio_session";
+    private static final AuditSink NO_AUDIT=new AuditSink(){public void record(String t,String c,String code,String op){}public boolean healthy(){return true;}};
+    private final HttpServer server; private final ExecutorService executor=Executors.newVirtualThreadPerTaskExecutor(); private final GameApplicationService games; private final PlayerQuery players; private final AuthService auth; private final Diagnostics diagnostics; private final AuditSink audit; private final boolean diagnosticMode; private final String expectedOrigin,expectedHost;
+    public AdminHttpServer(InetAddress bind,int port,GameApplicationService games,PlayerQuery players,AuthService auth,Diagnostics diagnostics)throws IOException{this(bind,port,games,players,auth,diagnostics,NO_AUDIT,false);}
+    public AdminHttpServer(InetAddress bind,int port,GameApplicationService games,PlayerQuery players,AuthService auth,Diagnostics diagnostics,AuditSink audit,boolean diagnosticMode)throws IOException{
+        if(!bind.isLoopbackAddress())throw new IllegalArgumentException("管理画面はlocalhost以外へ公開できません。");this.games=games;this.players=players;this.auth=auth;this.diagnostics=diagnostics;this.audit=audit;this.diagnosticMode=diagnosticMode;server=HttpServer.create(new InetSocketAddress(bind,port),0);expectedHost="127.0.0.1:"+server.getAddress().getPort();expectedOrigin="http://"+expectedHost;server.createContext("/",this::route);server.setExecutor(executor);
     }
-
-    public AdminHttpServer(InetAddress bind, int port, GameApplicationService games, PlayerQuery players, AuthService auth, Diagnostics diagnostics, Consumer<String> operationLog) throws IOException {
-        if (!bind.isLoopbackAddress()) throw new IllegalArgumentException("管理画面はlocalhost以外へ公開できません。");
-        this.games = games; this.players = players; this.auth = auth; this.diagnostics = diagnostics; this.operationLog = operationLog;
-        server = HttpServer.create(new InetSocketAddress(bind, port), 0);
-        this.expectedHost = "127.0.0.1:" + server.getAddress().getPort();
-        this.expectedOrigin = "http://" + expectedHost;
-        server.createContext("/", this::route);
-        server.setExecutor(executor);
-    }
-
-    public void start() { server.start(); }
-    public int port() { return server.getAddress().getPort(); }
-    public String issueBootstrapToken() { return auth.issueBootstrap(Duration.ofMinutes(2)); }
-
-    private void route(HttpExchange exchange) throws IOException {
-        try {
-            addSecurityHeaders(exchange);
-            String path = exchange.getRequestURI().getPath();
-            if (path.equals("/auth/bootstrap") && (exchange.getRequestMethod().equals("POST") || exchange.getRequestMethod().equals("GET"))) { bootstrap(exchange); return; }
-            if (!path.startsWith("/api/v1/")) { staticAsset(exchange, path); return; }
-            AuthService.Session session = authenticate(exchange).orElseThrow(() -> new HttpProblem(401, "AUTH_REQUIRED", "認証が必要です。"));
-            boolean mutation = !exchange.getRequestMethod().equals("GET");
-            if (mutation) validateMutation(exchange, session);
-            if (path.equals("/api/v1/auth/session") && method(exchange, "GET")) ok(exchange, Map.of("csrfToken", session.csrf()));
-            else if (path.equals("/api/v1/status") && method(exchange, "GET")) ok(exchange, status());
-            else if (path.equals("/api/v1/players") && method(exchange, "GET")) ok(exchange, Map.of("players", players.onlinePlayers().stream().map(this::player).toList()));
-            else if (path.equals("/api/v1/game/current") && method(exchange, "GET")) ok(exchange, game(games.current()));
-            else if (path.equals("/api/v1/system/diagnostics") && method(exchange, "GET")) ok(exchange, diagnostics.snapshot());
-            else if (path.equals("/api/v1/game/recruiting/start") && method(exchange, "POST")) ok(exchange, operation(() -> games.startRecruiting(header(exchange, "If-Game-State"))));
-            else if (path.equals("/api/v1/game/recruiting/close") && method(exchange, "POST")) ok(exchange, operation(() -> games.closeRecruiting(header(exchange, "If-Session-Id"))));
-            else throw new HttpProblem(404, "NOT_FOUND", "指定された機能はありません。");
-        } catch (DomainException e) { error(exchange, e.code().equals("SESSION_MISMATCH") ? 409 : 409, e.code(), e.getMessage()); }
-        catch (HttpProblem e) { error(exchange, e.status, e.code, e.getMessage()); }
-        catch (Exception e) { error(exchange, 500, "INTERNAL_ERROR", "内部エラーが発生しました。"); }
-        finally { exchange.close(); }
-    }
-
-    private void bootstrap(HttpExchange x) throws IOException {
-        String token = header(x, "X-Bootstrap-Token");
-        if (token.isEmpty() && x.getRequestURI().getRawQuery() != null) {
-            token = Arrays.stream(x.getRequestURI().getRawQuery().split("&")).filter(v -> v.startsWith("token=")).map(v -> v.substring(6)).findFirst().orElse("");
-        }
-        AuthService.Session session = auth.exchange(token).orElseThrow(() -> new HttpProblem(401, "AUTH_REQUIRED", "bootstrap tokenが無効です。"));
-        x.getResponseHeaders().add("Set-Cookie", COOKIE + "=" + session.id() + "; Path=/; HttpOnly; SameSite=Strict");
-        if (x.getRequestMethod().equals("GET")) {
-            x.getResponseHeaders().set("Location", "/");
-            x.sendResponseHeaders(303, -1);
-        } else send(x, 200, Json.value(Map.of("ok", true, "data", Map.of("csrfToken", session.csrf()))));
-    }
-
-    private Optional<AuthService.Session> authenticate(HttpExchange x) {
-        String cookies = x.getRequestHeaders().getFirst("Cookie");
-        if (cookies == null) return Optional.empty();
-        return Arrays.stream(cookies.split(";")).map(String::trim).filter(v -> v.startsWith(COOKIE + "=")).findFirst().flatMap(v -> auth.authenticate(v.substring(COOKIE.length() + 1)));
-    }
-
-    private void validateMutation(HttpExchange x, AuthService.Session session) {
-        if (!expectedHost.equalsIgnoreCase(header(x, "Host"))) throw new HttpProblem(403, "FORBIDDEN", "Hostが許可されていません。");
-        if (!expectedOrigin.equalsIgnoreCase(header(x, "Origin"))) throw new HttpProblem(403, "FORBIDDEN", "Originが許可されていません。");
-        if (!session.csrf().equals(header(x, "X-CSRF-Token"))) throw new HttpProblem(403, "FORBIDDEN", "CSRF tokenが無効です。");
-    }
-
-    private Map<String, Object> status() { Map<String,Object> data = new LinkedHashMap<>(game(games.current())); data.putAll(diagnostics.snapshot()); return data; }
-    private Map<String, Object> game(GameSession s) { return Map.of("gameState", s.state().name(), "sessionId", s.sessionId().toString(), "participantCount", s.participants().size(), "participantLimit", 4); }
-    private Map<String, Object> player(OnlinePlayerView p) { return Map.of("uuid", p.uuid().toString(), "name", p.name()); }
-    private Map<String, Object> operation(Supplier<com.ryanjei.orushio.pve.application.OperationResult> action) { var r = action.get(); operationLog.accept("operationId=" + r.operationId() + " state=" + r.state()); return Map.of("operationId", r.operationId(), "sessionId", r.sessionId(), "state", r.state()); }
-    private static boolean method(HttpExchange x, String value) { if (!x.getRequestMethod().equals(value)) throw new HttpProblem(405, "INVALID_INPUT", "HTTPメソッドが正しくありません。"); return true; }
-    private static String header(HttpExchange x, String name) { String v = x.getRequestHeaders().getFirst(name); return v == null ? "" : v; }
-
-    private void staticAsset(HttpExchange x, String path) throws IOException {
-        String resource = switch (path) { case "/", "/index.html" -> "/web/index.html"; case "/app.js" -> "/web/app.js"; case "/style.css" -> "/web/style.css"; default -> null; };
-        if (resource == null) throw new HttpProblem(404, "NOT_FOUND", "ページがありません。");
-        try (var stream = getClass().getResourceAsStream(resource)) {
-            if (stream == null) throw new HttpProblem(404, "NOT_FOUND", "ページがありません。");
-            byte[] bytes = stream.readAllBytes();
-            x.getResponseHeaders().set("Content-Type", resource.endsWith(".html") ? "text/html; charset=utf-8" : resource.endsWith(".css") ? "text/css; charset=utf-8" : "text/javascript; charset=utf-8");
-            x.sendResponseHeaders(200, bytes.length); x.getResponseBody().write(bytes);
-        }
-    }
-    private static void ok(HttpExchange x, Object data) throws IOException { send(x, 200, Json.value(Map.of("ok", true, "data", data))); }
-    private static void error(HttpExchange x, int status, String code, String message) throws IOException { send(x, status, Json.value(Map.of("ok", false, "error", Map.of("code", code, "message", message, "fields", Map.of(), "traceId", java.util.UUID.randomUUID().toString())))); }
-    private static void send(HttpExchange x, int status, String body) throws IOException { byte[] bytes = body.getBytes(StandardCharsets.UTF_8); x.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8"); x.sendResponseHeaders(status, bytes.length); x.getResponseBody().write(bytes); }
-    private static void addSecurityHeaders(HttpExchange x) { x.getResponseHeaders().set("X-Content-Type-Options", "nosniff"); x.getResponseHeaders().set("Content-Security-Policy", "default-src 'self'; connect-src 'self'; script-src 'self'; style-src 'self'"); x.getResponseHeaders().set("Cache-Control", "no-store"); }
-    public void close() { server.stop(1); executor.shutdownNow(); }
-    private static final class HttpProblem extends RuntimeException { final int status; final String code; HttpProblem(int status, String code, String message) { super(message); this.status = status; this.code = code; } }
+    public void start(){server.start();} public int port(){return server.getAddress().getPort();} public String issueBootstrapToken(){return auth.issueBootstrap(Duration.ofMinutes(2));}
+    private void route(HttpExchange x)throws IOException{String trace=UUID.randomUUID().toString();String operation=x.getRequestMethod()+" "+x.getRequestURI().getPath();try{addHeaders(x);String path=x.getRequestURI().getPath();if(path.equals("/auth/bootstrap")&&(x.getRequestMethod().equals("POST")||x.getRequestMethod().equals("GET"))){bootstrap(x);return;}if(!path.startsWith("/api/v1/")){asset(x,path);return;}AuthService.Session session=authenticated(x);boolean mutation=!x.getRequestMethod().equals("GET");if(mutation){validateMutation(x,session);if(diagnosticMode)throw new Problem(503,"DIAGNOSTIC_MODE","診断モードではゲーム操作を実行できません。");}
+        if(path.equals("/api/v1/auth/session")&&method(x,"GET"))ok(x,Map.of("csrfToken",session.csrf()));else if(path.equals("/api/v1/status")&&method(x,"GET"))ok(x,status());else if(path.equals("/api/v1/players")&&method(x,"GET"))ok(x,Map.of("players",players.onlinePlayers().stream().map(p->Map.of("uuid",p.uuid().toString(),"name",p.name())).toList()));else if(path.equals("/api/v1/game/current")&&method(x,"GET"))ok(x,game(games.current()));else if(path.equals("/api/v1/system/diagnostics")&&method(x,"GET"))ok(x,diagnostics.snapshot());else if(path.equals("/api/v1/game/recruiting/start")&&method(x,"POST"))ok(x,operation(games.startRecruiting(required(x,"If-Game-State"))));else if(path.equals("/api/v1/game/recruiting/close")&&method(x,"POST"))ok(x,operation(games.closeRecruiting(required(x,"If-Session-Id"))));else throw new Problem(404,"NOT_FOUND","指定された機能はありません。");
+      }catch(DomainException e){loggedError(x,trace,409,e.code(),e.getMessage(),operation);}catch(Problem e){loggedError(x,trace,e.status,e.code,e.getMessage(),operation);}catch(Exception e){loggedError(x,trace,500,"INTERNAL_ERROR","内部エラーが発生しました。",operation);}finally{x.close();}}
+    private AuthService.Session authenticated(HttpExchange x){String cookie=x.getRequestHeaders().getFirst("Cookie"),id=null;if(cookie!=null)id=Arrays.stream(cookie.split(";")).map(String::trim).filter(v->v.startsWith(COOKIE+"=")).map(v->v.substring(COOKIE.length()+1)).findFirst().orElse(null);AuthService.AuthResult r=auth.authenticateLimited(id,clientKey(x)+":session");if(r.type()==AuthService.ResultType.RATE_LIMITED)throw new Problem(429,"AUTH_RATE_LIMITED","認証試行回数が多すぎます。しばらく待ってください。");if(r.type()!=AuthService.ResultType.SUCCESS)throw new Problem(401,"AUTH_REQUIRED","認証が必要です。");return r.session();}
+    private void bootstrap(HttpExchange x)throws IOException{String token=header(x,"X-Bootstrap-Token");if(token.isEmpty()&&x.getRequestURI().getRawQuery()!=null)token=Arrays.stream(x.getRequestURI().getRawQuery().split("&")).filter(v->v.startsWith("token=")).map(v->v.substring(6)).findFirst().orElse("");AuthService.AuthResult r=auth.exchangeLimited(token,clientKey(x)+":bootstrap");if(r.type()==AuthService.ResultType.RATE_LIMITED)throw new Problem(429,"AUTH_RATE_LIMITED","認証試行回数が多すぎます。しばらく待ってください。");if(r.type()!=AuthService.ResultType.SUCCESS)throw new Problem(401,"AUTH_REQUIRED","bootstrap tokenが無効です。");x.getResponseHeaders().add("Set-Cookie",COOKIE+"="+r.session().id()+"; Path=/; HttpOnly; SameSite=Strict");if(x.getRequestMethod().equals("GET")){x.getResponseHeaders().set("Location","/");x.sendResponseHeaders(303,-1);}else ok(x,Map.of("csrfToken",r.session().csrf()));}
+    private void validateMutation(HttpExchange x,AuthService.Session s){if(!expectedHost.equalsIgnoreCase(header(x,"Host")))throw new Problem(403,"FORBIDDEN","Hostが許可されていません。");if(!expectedOrigin.equalsIgnoreCase(header(x,"Origin")))throw new Problem(403,"FORBIDDEN","Originが許可されていません。");if(!s.csrf().equals(header(x,"X-CSRF-Token")))throw new Problem(403,"FORBIDDEN","CSRF tokenが無効です。");}
+    private Map<String,Object> status(){Map<String,Object> d=new LinkedHashMap<>(game(games.current()));d.putAll(diagnostics.snapshot());return d;}private Map<String,Object> game(GameSession s){return Map.of("gameState",s.state().name(),"sessionId",s.sessionId().toString(),"participantCount",s.participants().size(),"participantLimit",4);}private static Map<String,Object> operation(OperationResult r){return Map.of("operationId",r.operationId(),"sessionId",r.sessionId(),"state",r.state());}
+    private void loggedError(HttpExchange x,String trace,int status,String code,String message,String operation)throws IOException{audit.record(trace,"HTTP_ERROR",code,operation);error(x,status,code,message,trace);}private static String required(HttpExchange x,String name){String v=header(x,name);if(v.isBlank())throw new Problem(400,"INVALID_INPUT",name+"が必要です。");return v;}private static String clientKey(HttpExchange x){return x.getRemoteAddress().getAddress().getHostAddress();}private static String header(HttpExchange x,String n){String v=x.getRequestHeaders().getFirst(n);return v==null?"":v;}private static boolean method(HttpExchange x,String m){if(!x.getRequestMethod().equals(m))throw new Problem(405,"INVALID_INPUT","HTTPメソッドが正しくありません。");return true;}
+    private void asset(HttpExchange x,String path)throws IOException{String r=switch(path){case "/","/index.html"->"/web/index.html";case "/app.js"->"/web/app.js";case "/style.css"->"/web/style.css";default->null;};if(r==null)throw new Problem(404,"NOT_FOUND","ページがありません。");try(var in=getClass().getResourceAsStream(r)){if(in==null)throw new Problem(404,"NOT_FOUND","ページがありません。");byte[] b=in.readAllBytes();x.getResponseHeaders().set("Content-Type",r.endsWith(".html")?"text/html; charset=utf-8":r.endsWith(".css")?"text/css; charset=utf-8":"text/javascript; charset=utf-8");x.sendResponseHeaders(200,b.length);x.getResponseBody().write(b);}}
+    private static void ok(HttpExchange x,Object d)throws IOException{send(x,200,Json.value(Map.of("ok",true,"data",d)));}private static void error(HttpExchange x,int s,String c,String m,String t)throws IOException{send(x,s,Json.value(Map.of("ok",false,"error",Map.of("code",c,"message",m,"fields",Map.of(),"traceId",t))));}private static void send(HttpExchange x,int s,String body)throws IOException{byte[] b=body.getBytes(StandardCharsets.UTF_8);x.getResponseHeaders().set("Content-Type","application/json; charset=utf-8");x.sendResponseHeaders(s,b.length);x.getResponseBody().write(b);}private static void addHeaders(HttpExchange x){x.getResponseHeaders().set("X-Content-Type-Options","nosniff");x.getResponseHeaders().set("Content-Security-Policy","default-src 'self'; connect-src 'self'; script-src 'self'; style-src 'self'");x.getResponseHeaders().set("Cache-Control","no-store");}
+    public void close(){server.stop(1);executor.shutdownNow();}private static final class Problem extends RuntimeException{final int status;final String code;Problem(int s,String c,String m){super(m);status=s;code=c;}}
 }

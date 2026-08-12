@@ -1,0 +1,3 @@
+package com.ryanjei.orushio.pve.http;
+import static org.junit.jupiter.api.Assertions.*;import java.nio.charset.StandardCharsets;import org.junit.jupiter.api.Test;
+class WebAssetsTest{@Test void システム画面は診断APIとescapeを使う()throws Exception{String js=new String(getClass().getResourceAsStream("/web/app.js").readAllBytes(),StandardCharsets.UTF_8);assertTrue(js.contains("/system/diagnostics"));assertTrue(js.contains("escapeHtml"));assertTrue(js.contains("loadDiagnostics"));}@Test void 未対応画面はdisabledとPhase表示を持つ()throws Exception{String html=new String(getClass().getResourceAsStream("/web/index.html").readAllBytes(),StandardCharsets.UTF_8);assertTrue(html.contains("disabled>マップ"));assertTrue(html.contains("Phase 2以降"));assertTrue(html.contains("data-page=\"system\""));}}
