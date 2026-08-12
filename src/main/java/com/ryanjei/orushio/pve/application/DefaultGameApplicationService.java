@@ -15,6 +15,11 @@ public final class DefaultGameApplicationService implements GameApplicationServi
         this.session = repository.load().orElseGet(GameSession::idle);
     }
 
+    public DefaultGameApplicationService(ActiveSessionRepository repository, GameSession initialSession) {
+        this.repository = repository;
+        this.session = java.util.Objects.requireNonNull(initialSession);
+    }
+
     public synchronized GameSession current() { return session; }
 
     public synchronized OperationResult startRecruiting(String expectedState) {

@@ -43,6 +43,26 @@ class AtomicYamlStoreTest {
     @Test void 不正な書込みschemaはRepositoryErrorになる() {
         assertThrows(RepositoryException.class, () -> new AtomicYamlStore(temp.resolve("x.yml")).write(Map.of("schemaVersion","invalid")));
     }
+    @Test void 一般破損への直接保存は現行とbackupを変更しない() throws Exception {
+        Path path=temp.resolve("config.yml"), backup=temp.resolve("config.yml.bak"); AtomicYamlStore store=new AtomicYamlStore(path);
+        store.write(values("A")); store.write(values("B")); Files.writeString(path,"broken-current");
+        String currentBefore=Files.readString(path), backupBefore=Files.readString(backup);
+        assertThrows(RepositoryException.class,()->store.write(values("C")));
+        assertEquals(currentBefore,Files.readString(path)); assertEquals(backupBefore,Files.readString(backup));
+        assertFalse(Files.exists(temp.resolve("config.yml.tmp"))); assertFalse(Files.exists(temp.resolve("config.yml.restore.tmp")));
+        assertEquals("A",store.read().orElseThrow().get("port")); store.write(values("C"));
+        assertEquals("A",new AtomicYamlStore(backup).read().orElseThrow().get("port")); assertEquals("C",store.read().orElseThrow().get("port"));
+    }
+    @Test void 各種schema異常への直接保存を拒否する() throws Exception {
+        for(String content:java.util.List.of("port: \"1\"\n","schemaVersion: \"bad\"\n","schemaVersion: \"0\"\n","schemaVersion: \"99\"\n")){
+            Path path=temp.resolve("case-"+Math.abs(content.hashCode())+".yml");Files.writeString(path,content);String before=Files.readString(path);
+            assertThrows(RepositoryException.class,()->new AtomicYamlStore(path).write(values("2")));assertEquals(before,Files.readString(path));assertFalse(Files.exists(path.resolveSibling(path.getFileName()+".tmp")));
+        }
+    }
+    @Test void 正常な通常保存は直前版をbackupにする() {
+        Path path=temp.resolve("normal.yml");AtomicYamlStore store=new AtomicYamlStore(path);store.write(values("A"));store.write(values("B"));
+        assertEquals("A",new AtomicYamlStore(path.resolveSibling("normal.yml.bak")).read().orElseThrow().get("port"));
+    }
     @Test void 未知の新しいschemaはバックアップで上書きしない() throws Exception {
         Path path = temp.resolve("config.yml"); AtomicYamlStore store = new AtomicYamlStore(path);
         store.write(values("8765")); store.write(values("9000"));

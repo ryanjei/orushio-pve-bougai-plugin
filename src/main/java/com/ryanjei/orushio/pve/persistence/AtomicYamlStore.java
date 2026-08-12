@@ -43,7 +43,7 @@ public final class AtomicYamlStore {
         validateWriteVersion(values);
         try {
             Files.createDirectories(path.getParent());
-            rejectNewerExistingSchema();
+            validateExistingFileBeforeWrite();
             Path temp = path.resolveSibling(path.getFileName() + ".tmp");
             writeAndFlush(temp, values);
             if (Files.exists(path)) Files.copy(path, backupPath(), StandardCopyOption.REPLACE_EXISTING);
@@ -63,15 +63,15 @@ public final class AtomicYamlStore {
         }
     }
 
-    private void rejectNewerExistingSchema() throws IOException {
+    private void validateExistingFileBeforeWrite() throws IOException {
         if (!Files.exists(path)) return;
-        List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
-        String rawVersion = null;
-        for (String line : lines) if (line.trim().startsWith("schemaVersion:")) { rawVersion = unquote(line.substring(line.indexOf(':') + 1).trim()); break; }
-        if (rawVersion == null) return; // 破損は通常の保存でバックアップへ退避可能。
         try {
-            if (Integer.parseInt(rawVersion) > SCHEMA_VERSION) throw new RepositoryException("新しいschemaVersionのため上書きできません。");
-        } catch (NumberFormatException e) { throw new RepositoryException("既存のschemaVersionが不正です。", e); }
+            parse(Files.readAllLines(path, StandardCharsets.UTF_8));
+        } catch (SchemaTooNewException e) {
+            throw new RepositoryException("新しいschemaVersionのため上書きできません。", e);
+        } catch (RepositoryException e) {
+            throw new RepositoryException("既存データが破損しているため、先に読込みによる復元が必要です。", e);
+        }
     }
 
     private static void validateWriteVersion(Map<String, String> values) {
