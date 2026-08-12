@@ -30,7 +30,7 @@ public final class AtomicYamlStore {
             if (!Files.exists(backup)) throw new RepositoryException("保存データが破損しており、バックアップもありません。", primary);
             try {
                 Map<String, String> recovered = parse(Files.readAllLines(backup, StandardCharsets.UTF_8));
-                write(recovered);
+                restoreWithoutRotatingBackup(recovered);
                 return Optional.of(recovered);
             } catch (RuntimeException | IOException backupFailure) {
                 primary.addSuppressed(backupFailure);
@@ -40,22 +40,51 @@ public final class AtomicYamlStore {
     }
 
     public synchronized void write(Map<String, String> values) {
-        String version = values.get("schemaVersion");
-        if (version == null || Integer.parseInt(version) != SCHEMA_VERSION) {
-            throw new RepositoryException("未知のschemaVersionは上書きできません。");
-        }
+        validateWriteVersion(values);
         try {
             Files.createDirectories(path.getParent());
+            validateExistingFileBeforeWrite();
             Path temp = path.resolveSibling(path.getFileName() + ".tmp");
-            StringBuilder yaml = new StringBuilder();
-            values.forEach((key, value) -> yaml.append(key).append(": ").append(quote(value)).append('\n'));
-            Files.writeString(temp, yaml, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-            try (FileChannel channel = FileChannel.open(temp, StandardOpenOption.WRITE)) { channel.force(true); }
+            writeAndFlush(temp, values);
             if (Files.exists(path)) Files.copy(path, backupPath(), StandardCopyOption.REPLACE_EXISTING);
             move(temp, path);
         } catch (IOException | NumberFormatException e) {
             throw new RepositoryException("保存に失敗しました。", e);
         }
+    }
+
+    private void restoreWithoutRotatingBackup(Map<String, String> values) throws IOException {
+        Path temp = path.resolveSibling(path.getFileName() + ".restore.tmp");
+        try {
+            writeAndFlush(temp, values);
+            move(temp, path);
+        } finally {
+            Files.deleteIfExists(temp);
+        }
+    }
+
+    private void validateExistingFileBeforeWrite() throws IOException {
+        if (!Files.exists(path)) return;
+        try {
+            parse(Files.readAllLines(path, StandardCharsets.UTF_8));
+        } catch (SchemaTooNewException e) {
+            throw new RepositoryException("新しいschemaVersionのため上書きできません。", e);
+        } catch (RepositoryException e) {
+            throw new RepositoryException("既存データが破損しているため、先に読込みによる復元が必要です。", e);
+        }
+    }
+
+    private static void validateWriteVersion(Map<String, String> values) {
+        try {
+            if (Integer.parseInt(values.getOrDefault("schemaVersion", "-1")) != SCHEMA_VERSION) throw new RepositoryException("未知のschemaVersionは上書きできません。");
+        } catch (NumberFormatException e) { throw new RepositoryException("schemaVersionが不正です。", e); }
+    }
+
+    private static void writeAndFlush(Path target, Map<String, String> values) throws IOException {
+        StringBuilder yaml = new StringBuilder();
+        values.forEach((key, value) -> yaml.append(key).append(": ").append(quote(value)).append('\n'));
+        Files.writeString(target, yaml, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        try (FileChannel channel = FileChannel.open(target, StandardOpenOption.WRITE)) { channel.force(true); }
     }
 
     private Map<String, String> parse(List<String> lines) {

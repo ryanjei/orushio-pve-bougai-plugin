@@ -1,16 +1,4 @@
 package com.ryanjei.orushio.pve.application;
-
-import static org.junit.jupiter.api.Assertions.*;
-import java.time.Duration;
-import java.util.concurrent.Callable;
-import org.junit.jupiter.api.Test;
-
-class GameThreadExecutorContractTest {
-    @Test void ApplicationはGatewayの完了結果を待てる() throws Exception {
-        GameThreadExecutor fake = new GameThreadExecutor() {
-            public <T> T execute(Callable<T> task, Duration timeout) throws Exception { return task.call(); }
-            public boolean isAcceptingTasks() { return true; }
-        };
-        assertEquals("完了", fake.execute(() -> "完了", Duration.ofSeconds(1)));
-    }
+import static org.junit.jupiter.api.Assertions.*;import java.time.Duration;import java.util.concurrent.*;import java.util.concurrent.atomic.AtomicInteger;import org.junit.jupiter.api.Test;
+class GameThreadExecutorContractTest{@Test void 呼出側はGateway完了まで待つ()throws Exception{ControlledGateway gateway=new ControlledGateway();CompletableFuture<String> call=CompletableFuture.supplyAsync(()->{try{return gateway.execute(()->"完了",Duration.ofSeconds(1));}catch(Exception e){throw new CompletionException(e);}});Thread.sleep(50);assertFalse(call.isDone());gateway.release.countDown();assertEquals("完了",call.get());assertEquals(1,gateway.executions.get());}@Test void timeoutしても自動再実行しない(){ControlledGateway gateway=new ControlledGateway();assertThrows(TimeoutException.class,()->gateway.execute(()->"never",Duration.ofMillis(30)));assertEquals(1,gateway.executions.get());}@Test void 停止中は新規処理を拒否する(){ControlledGateway gateway=new ControlledGateway();gateway.accepting=false;assertThrows(IllegalStateException.class,()->gateway.execute(()->"x",Duration.ofSeconds(1)));assertEquals(0,gateway.executions.get());}private static final class ControlledGateway implements GameThreadExecutor{final CountDownLatch release=new CountDownLatch(1);final AtomicInteger executions=new AtomicInteger();volatile boolean accepting=true;public<T>T execute(Callable<T> task,Duration timeout)throws Exception{if(!accepting)throw new IllegalStateException("stopped");executions.incrementAndGet();if(!release.await(timeout.toMillis(),TimeUnit.MILLISECONDS))throw new TimeoutException();return task.call();}public boolean isAcceptingTasks(){return accepting;}}
 }

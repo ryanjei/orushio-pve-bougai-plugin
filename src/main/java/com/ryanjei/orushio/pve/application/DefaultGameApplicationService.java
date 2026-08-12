@@ -15,12 +15,18 @@ public final class DefaultGameApplicationService implements GameApplicationServi
         this.session = repository.load().orElseGet(GameSession::idle);
     }
 
+    public DefaultGameApplicationService(ActiveSessionRepository repository, GameSession initialSession) {
+        this.repository = repository;
+        this.session = java.util.Objects.requireNonNull(initialSession);
+    }
+
     public synchronized GameSession current() { return session; }
 
     public synchronized OperationResult startRecruiting(String expectedState) {
         if (!session.state().name().equals(expectedState)) conflict();
-        session.transitionTo(GameState.RECRUITING);
-        repository.save(session);
+        GameSession next = session.transitionedTo(GameState.RECRUITING);
+        repository.save(next);
+        session = next;
         return result();
     }
 
@@ -28,10 +34,10 @@ public final class DefaultGameApplicationService implements GameApplicationServi
         if (!session.sessionId().toString().equals(expectedSessionId)) {
             throw new DomainException("SESSION_MISMATCH", "画面のセッションが現在のセッションと一致しません。");
         }
-        session.transitionTo(GameState.IDLE);
-        repository.save(session);
-        session = GameSession.idle();
-        repository.save(session);
+        session.transitionedTo(GameState.IDLE); // Domainの許可遷移を必ず検証する。
+        GameSession next = GameSession.newIdle();
+        repository.save(next);
+        session = next;
         return result();
     }
 

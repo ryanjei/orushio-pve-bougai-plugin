@@ -7,7 +7,7 @@ import java.util.UUID;
 
 public final class GameSession {
     private final UUID sessionId;
-    private GameState state;
+    private final GameState state;
     private final List<Participant> participants;
     private final Instant createdAt;
 
@@ -22,15 +22,17 @@ public final class GameSession {
         return new GameSession(UUID.randomUUID(), GameState.IDLE, List.of(), Instant.now());
     }
 
-    public synchronized void transitionTo(GameState next) {
+    public GameSession transitionedTo(GameState next) {
         if (!state.canTransitionTo(next)) {
             throw new DomainException("GAME_STATE_CONFLICT", "現在の状態「" + state + "」から「" + next + "」へ変更できません。");
         }
-        state = next;
+        return new GameSession(sessionId, next, participants, createdAt);
     }
 
+    public static GameSession newIdle() { return idle(); }
+
     public UUID sessionId() { return sessionId; }
-    public synchronized GameState state() { return state; }
+    public GameState state() { return state; }
     public List<Participant> participants() { return participants; }
     public Instant createdAt() { return createdAt; }
 }
