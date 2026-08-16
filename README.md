@@ -17,6 +17,7 @@ Paper 1.21.11 build 132は初回起動時に公式配布元から取得・検証
 ## 初回起動
 
 1. Repository最上位の `START_SERVER.bat` をダブルクリックします。
+   ダブルクリック直後に「Orushio PVE サーバーを起動しています...」と表示されます。
 2. 初回だけMinecraft EULAのURLと確認画面が表示されます。内容を確認し、同意する場合だけ「同意する」を選びます。
 3. Java確認、現在checkout中のソースのbuild、Paper取得、最新plugin配置が自動で行われます。
 4. Paperの起動が完了すると、認証済み管理画面が既定ブラウザで自動的に開きます。
@@ -65,6 +66,10 @@ PowerShell、Git Bash、コマンドプロンプト、Gradleコマンドを利�
 `.runtime`を削除するとワールド、設定、マップ等も失われます。バックアップなしで削除しないでください。
 
 ## トラブル時
+
+- `START_SERVER.bat`は、失敗時に日本語の原因と確認先を表示したまま停止します。PowerShell、Git Bash、cmd、Gradle、Javaコマンドを手入力する必要はありません。
+- 起動処理の記録は `.runtime/paper/logs/launcher.log`、Paperとpluginの記録は `.runtime/paper/logs/latest.log` に保存されます。
+- 管理画面の自動表示に失敗した場合は日本語ダイアログが表示されます。既定ブラウザ設定と上記ログを確認してください。
 
 - Javaエラー：`java -version`等の入力は不要です。64bit版Java 21をインストールし、Windowsを再起動してから再実行してください。
 - build失敗：起動画面に表示されたGradleエラーを確認してください。古いpluginでは起動しません。

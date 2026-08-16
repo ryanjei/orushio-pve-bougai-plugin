@@ -160,5 +160,8 @@
 - 初回だけMinecraft EULAを表示し、利用者が明示的に同意した場合のみ`eula=true`を作成する。
 - プラグインは2分・1回限りのbootstrap URLを`admin-bootstrap.url`へ原子的に発行する。起動補助は読み取り後に削除し、localhost URLだけを既定ブラウザで開く。
 - 起動失敗は日本語で原因と確認先を表示し、`START_SERVER.bat`がウィンドウを閉じずに待機する。
+- BAT自身がPowerShell起動前に目視メッセージを表示し、script欠損、PowerShell欠損・異常終了を検出して必ず停止表示する。
+- Windows向けBATはUTF-8（BOMなし）・CRLFで管理し、起動処理は`.runtime/paper/logs/launcher.log`へ記録する。
+- ユーザー実機受入前には、Repository入口、初回・2回目起動、意図的失敗、管理画面到達、Phase 1〜3簡易回帰をPreflightとして確認し、GUIで未確認の項目を成功扱いしない。
 - 終了は起動ウィンドウで`Ctrl+C`を1回押し、Paperのshutdown処理を完了させる。
 - Windows実機確認では、Java 21自動検出、最新build、Paper取得・検証、配置JAR一致、Paper Ready、bootstrap認証303、同一token再利用401、`stop`による正常終了コード0を確認した。
