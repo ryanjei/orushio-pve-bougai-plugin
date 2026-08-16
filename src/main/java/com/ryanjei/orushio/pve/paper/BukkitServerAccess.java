@@ -4,17 +4,22 @@ import com.ryanjei.orushio.pve.application.OnlinePlayerView;
 import com.ryanjei.orushio.pve.application.WhitelistEntryView;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.NamespacedKey;
+import org.bukkit.persistence.PersistentDataType;
 import java.util.List;
 import java.util.UUID;
 
 final class BukkitServerAccess implements PaperServerAccess {
+    private final NamespacedKey grantedKey;
+    BukkitServerAccess() { grantedKey=new NamespacedKey("orushio","setup_administrator_granted"); }
     @Override public List<OnlinePlayerView> onlinePlayers() { return Bukkit.getOnlinePlayers().stream().map(player -> new OnlinePlayerView(player.getUniqueId(), player.getName(), setupAdministrator(player))).toList(); }
     @Override public OnlinePlayerView grantSetupAdministrator(UUID playerId) {
         var player = Bukkit.getPlayer(playerId);
         if (player == null || !player.isOnline()) throw new com.ryanjei.orushio.pve.application.ServerAdministrationException("PLAYER_NOT_ONLINE", "指定されたプレイヤーは現在オンラインではありません。");
-        player.setOp(true);
+        if (!setupAdministrator(player)) { player.getPersistentDataContainer().set(grantedKey,PersistentDataType.BYTE,(byte)1);player.setOp(true); }
         return new OnlinePlayerView(player.getUniqueId(), player.getName(), setupAdministrator(player));
     }
+    @Override public OnlinePlayerView revokeSetupAdministrator(UUID playerId) { var player=Bukkit.getPlayer(playerId);if(player==null||!player.isOnline())throw new com.ryanjei.orushio.pve.application.ServerAdministrationException("PLAYER_NOT_ONLINE","指定されたプレイヤーは現在オンラインではありません。");if(!player.getPersistentDataContainer().has(grantedKey,PersistentDataType.BYTE))throw new com.ryanjei.orushio.pve.application.ServerAdministrationException("ADMINISTRATOR_NOT_PLUGIN_GRANTED","この管理者権限はOrushioから付与されたものではないため解除できません。");player.getPersistentDataContainer().remove(grantedKey);player.setOp(false);return new OnlinePlayerView(player.getUniqueId(),player.getName(),setupAdministrator(player)); }
     @Override public boolean whitelistEnabled() { return Bukkit.hasWhitelist(); }
     @Override public void setWhitelistEnabled(boolean enabled) { Bukkit.setWhitelist(enabled); }
     @Override public List<WhitelistEntryView> whitelistedPlayers() { return Bukkit.getWhitelistedPlayers().stream().map(BukkitServerAccess::view).toList(); }

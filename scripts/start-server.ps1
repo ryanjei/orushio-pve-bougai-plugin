@@ -65,8 +65,8 @@ try {
     if (-not (Test-Path -LiteralPath $eula)) {
         Show-Step '初回のMinecraft EULA確認を行います。'
         Write-Host '初回のみMinecraft EULAへの同意が必要です: https://aka.ms/MinecraftEULA'
-        $choice=$Host.UI.PromptForChoice('Minecraft EULA','内容を確認し、同意する場合だけ「同意する」を選択してください。',@('&同意する','&中止'),1)
-        if ($choice -ne 0) { Stop-WithMessage 'EULAへ同意していないため起動を中止しました。' }
+        do { $choice=(Read-Host 'Y = 同意して続行 / N = 中止').Trim().ToUpperInvariant() } while ($choice -notin @('Y','N'))
+        if ($choice -ne 'Y') { Stop-WithMessage 'EULAへ同意していないため起動を中止しました。' }
         Set-Content -LiteralPath $eula -Value 'eula=true' -Encoding ascii
     }
     $properties = Join-Path $runtime 'server.properties'
@@ -84,11 +84,15 @@ try {
 
     Show-Step 'Paperを起動しています。plugin enable、HTTP bind、管理画面準備の完了を待ってください。'
     Write-Host 'Paperを起動します。管理画面は準備完了後に自動で開きます。' -ForegroundColor Green
-    Write-Host '安全に終了するには、このウィンドウで Ctrl+C を1回押してください。'
-    Push-Location $runtime
-    try { & $javaExe '-Xms1G' '-Xmx2G' '-Dpaper.disableStartupVersionCheck=true' '-jar' $paperJar '--nogui'; $paperExit=$LASTEXITCODE } finally { Pop-Location }
+    Write-Host '安全に終了するには、このウィンドウで Y キーを押してください。Paperコマンド入力は不要です。' -ForegroundColor Yellow
+    $paperInfo=[Diagnostics.ProcessStartInfo]::new();$paperInfo.FileName=$javaExe;$paperInfo.WorkingDirectory=$runtime;$paperInfo.UseShellExecute=$false;$paperInfo.RedirectStandardInput=$true;$paperInfo.Arguments='-Xms1G -Xmx2G -Dpaper.disableStartupVersionCheck=true -jar "'+$paperJar+'" --nogui'
+    $paperProcess=[Diagnostics.Process]::Start($paperInfo)
+    if($null -eq $paperProcess){Stop-WithMessage 'Paperプロセスを開始できませんでした。'}
+    while(-not $paperProcess.HasExited){$preflight=$env:ORUSHIO_PREFLIGHT_AUTOSTOP -eq '1';$requestStop=$preflight -and (Test-Path -LiteralPath $handoff);if(-not $preflight -and [Console]::KeyAvailable){$key=[Console]::ReadKey($true);$requestStop=$key.KeyChar.ToString().ToUpperInvariant() -eq 'Y' -or (($key.Modifiers -band [ConsoleModifiers]::Control) -and $key.Key -eq [ConsoleKey]::C)}if($requestStop){Write-Host '';Write-Host '[STOP] stop要求';Write-Host 'Paperへ安全停止を要求しています。保存完了までお待ちください。' -ForegroundColor Yellow;$paperProcess.StandardInput.WriteLine('stop');$paperProcess.StandardInput.Flush();break}Start-Sleep -Milliseconds 100}
+    $paperProcess.WaitForExit();$paperExit=$paperProcess.ExitCode;Write-Host "[STOP] Paper終了コード=$paperExit"
     if ($paperExit -ne 0) { Stop-WithMessage "Paperが異常終了しました（終了コード: $paperExit）。.runtime\paper\logs\latest.logを確認してください。" }
-    Write-Host 'サーバーを安全に停止しました。' -ForegroundColor Green
+    Write-Host '[STOP] 正常終了 / launcher終了'
+    Write-Host 'Orushio PVEサーバーを安全に停止しました。' -ForegroundColor Green
     Stop-Transcript | Out-Null
     exit 0
 } catch {

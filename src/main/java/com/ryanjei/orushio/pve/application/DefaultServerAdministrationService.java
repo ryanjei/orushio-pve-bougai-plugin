@@ -21,6 +21,7 @@ public final class DefaultServerAdministrationService implements ServerAdministr
     @Override public synchronized OnlinePlayerView grantSetupAdministrator(UUID playerId) {
         return gateway.grantSetupAdministrator(Objects.requireNonNull(playerId));
     }
+    @Override public synchronized OnlinePlayerView revokeSetupAdministrator(UUID playerId) { return gateway.revokeSetupAdministrator(Objects.requireNonNull(playerId)); }
 
     @Override public boolean whitelistEnabled() { return gateway.whitelistEnabled(); }
 

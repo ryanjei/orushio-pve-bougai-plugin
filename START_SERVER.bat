@@ -35,6 +35,10 @@ if not "%ORUSHIO_EXIT%"=="0" (
   goto :failure
 )
 
+echo.
+echo Orushio PVEサーバーの処理が正常に完了しました。
+echo 何かキーを押すとこのウィンドウを閉じます。
+pause >nul
 endlocal
 exit /b 0
 

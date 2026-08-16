@@ -38,7 +38,7 @@ class WindowsLauncherAssetsTest {
     }
 
     @Test void launcherBuildsBeforeDeployAndExplainsAllRequiredFailures() throws Exception {
-        String script=Files.readString(Path.of("scripts/start-server.ps1"));int build=script.indexOf("build --no-daemon"),failure=script.indexOf("plugin buildに失敗"),deploy=script.indexOf("Copy-Item -LiteralPath $builtJar"),paper=script.indexOf("-jar' $paperJar");
+        String script=Files.readString(Path.of("scripts/start-server.ps1"));int build=script.indexOf("build --no-daemon"),failure=script.indexOf("plugin buildに失敗"),deploy=script.indexOf("Copy-Item -LiteralPath $builtJar"),paper=script.indexOf("$paperInfo.Arguments");
         assertTrue(build>=0&&build<failure&&failure<deploy&&deploy<paper);assertTrue(script.contains("if ($LASTEXITCODE -ne 0)"));
         for(String message:new String[]{"Java 21を確認できません","ポート25565が使用中","管理画面ポート8765が使用中","Paper取得に失敗","検証に失敗","EULAへ同意","plugin配置に失敗","Paperが異常終了","open-admin.ps1 が見つかりません"})assertTrue(script.contains(message),message);
         assertTrue(script.contains("launcher.log"));assertTrue(script.contains("Show-Step"));
@@ -48,4 +48,5 @@ class WindowsLauncherAssetsTest {
         String script=Files.readString(Path.of("scripts/start-server.ps1")),opener=Files.readString(Path.of("scripts/open-admin.ps1"));
         assertTrue(script.contains("paper-1.21.11-132.jar"));assertTrue(script.contains("5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba"));assertTrue(script.contains("Security.Cryptography.SHA256"));assertTrue(opener.contains("http://127.0.0.1:8765/auth/bootstrap?token=*"));assertTrue(opener.indexOf("Remove-Item -LiteralPath $Handoff")<opener.indexOf("Start-Process $url"));assertTrue(opener.contains("管理画面の準備が120秒以内"));assertTrue(opener.contains("既定ブラウザの設定"));assertFalse(script.contains("secrets.yml"));
     }
+    @Test void launcherProvidesSafeStopAndSeparatesNormalAndAbnormalExitWithoutLoggingSecrets()throws Exception{String script=Files.readString(Path.of("scripts/start-server.ps1"));assertTrue(script.contains("Y キーを押してください"));assertTrue(script.contains("StandardInput.WriteLine('stop')"));assertTrue(script.contains("$paperProcess.WaitForExit()"));assertTrue(script.contains("Paper終了コード=$paperExit"));assertTrue(script.contains("Orushio PVEサーバーを安全に停止しました"));assertTrue(script.contains("Paperが異常終了しました"));assertTrue(script.contains("CtrlPressed")||script.contains("ConsoleModifiers]::Control"));assertFalse(script.contains("bootstrap?token="));assertFalse(script.contains("installationSecret"));}
 }

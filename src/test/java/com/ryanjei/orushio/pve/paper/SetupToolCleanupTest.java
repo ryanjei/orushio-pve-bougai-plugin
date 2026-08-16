@@ -1,0 +1,2 @@
+package com.ryanjei.orushio.pve.paper;import static org.junit.jupiter.api.Assertions.*;import java.util.List;import org.junit.jupiter.api.Test;
+class SetupToolCleanupTest{@Test void saveとdiscard共通cleanupは所有toolのslotだけを選び無関係itemを残す(){record Item(String name,boolean owned){}var tool=new Item("setup-tool",true);var unrelated=new Item("same-name-unrelated",false);var stone=new Item("stone",false);assertEquals(List.of(0),SetupToolCleanup.ownedSlots(List.of(tool,unrelated,stone),Item::owned));}}
