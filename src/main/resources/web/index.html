@@ -1,1 +1,22 @@
-<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Orushio PVE 管理</title><link rel="stylesheet" href="/style.css"></head><body><aside><h1>Orushio PVE</h1><nav><button data-page="dashboard">ダッシュボード</button><button data-page="game">ゲーム操作</button><button data-page="players">プレイヤー</button><button disabled>マップ <small>Phase 2以降</small></button><button disabled>マップ設定 <small>Phase 2以降</small></button><button disabled>バランス <small>Phase 4</small></button><button disabled>装備・ショップ <small>Phase 3以降</small></button><button disabled>履歴・ログ <small>Phase 4</small></button><button data-page="system">システム</button></nav></aside><main><header><h2 id="title">ダッシュボード</h2><span id="notice">認証待ち</span></header><section id="dashboard"><div class="cards"><article><h3>Paper</h3><strong id="paper">—</strong></article><article><h3>ゲーム状態</h3><strong id="state">—</strong></article><article><h3>参加人数</h3><strong id="participants">—</strong></article><article><h3>プラグイン</h3><strong id="version">—</strong></article></div><h3>警告</h3><ul id="warnings"></ul></section><section id="game" hidden><h3>Phase 1 ゲーム操作</h3><div class="actions"><button id="start">参加受付を開始</button><button id="close">参加受付を終了</button></div><p>準備開始以降はPhase 2以降で利用できます。</p></section><section id="players-page" hidden><h3>オンラインプレイヤー</h3><ul id="players"></ul></section><section id="system" hidden><h3>システム診断</h3><dl id="diagnostics"></dl></section></main><script src="/app.js"></script></body></html>
+<!doctype html>
+<html lang="ja">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Orushio PVE 管理</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<aside><h1>Orushio PVE</h1><nav>
+<button data-page="home">ホーム</button><button data-page="game">ゲーム操作</button>
+<button disabled>マップ <small>後続Phase</small></button><button disabled>マップ設定 <small>後続Phase</small></button>
+<button disabled>バランス <small>後続Phase</small></button><button disabled>装備・ショップ <small>後続Phase</small></button>
+<button disabled>履歴・ログ <small>後続Phase</small></button><button data-page="system">システム</button>
+</nav></aside>
+<main><header><div><p class="eyebrow">サーバー管理</p><h2 id="title">ホーム</h2></div><span id="notice" role="status">認証待ち</span></header>
+<section id="home">
+<div class="cards"><article><h3>Paper</h3><strong id="paper">—</strong></article><article><h3>ゲーム状態</h3><strong id="state">—</strong></article><article><h3>参加人数</h3><strong id="participants">—</strong></article><article><h3>ホワイトリスト</h3><strong id="whitelist-status">—</strong></article></div>
+<div class="columns"><article class="panel"><div class="panel-title"><div><h3>現在の参加者</h3><p id="online-count">取得中</p></div><button class="secondary" id="refresh">更新</button></div><ul id="players" class="list"><li>読み込んでいます…</li></ul></article>
+<article class="panel"><div class="panel-title"><div><h3>ホワイトリスト管理</h3><p>Paperサーバーの参加許可設定です。</p></div><label class="switch"><input id="whitelist-toggle" type="checkbox"><span>ON</span></label></div>
+<form id="whitelist-form"><label for="player-name">プレイヤー名</label><div class="input-row"><input id="player-name" name="name" maxlength="16" autocomplete="off" placeholder="例: Player_1" required><button type="submit">追加</button></div></form>
+<ul id="whitelist-players" class="list"><li>読み込んでいます…</li></ul></article></div>
+<article class="panel"><h3>警告</h3><ul id="warnings" class="list compact"></ul></article>
+</section>
+<section id="game" hidden><article class="panel"><h3>ゲーム操作</h3><div class="actions"><button id="start">参加受付を開始</button><button id="close" class="warning">参加受付を終了</button></div><p>準備開始以降のゲーム機能は後続Phaseで利用できます。</p></article></section>
+<section id="system" hidden><article class="panel"><h3>システム診断</h3><dl id="diagnostics"></dl></article></section>
+</main><script src="/app.js"></script></body></html>
