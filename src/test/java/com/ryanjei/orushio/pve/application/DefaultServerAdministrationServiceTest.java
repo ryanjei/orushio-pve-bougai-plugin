@@ -22,6 +22,15 @@ class DefaultServerAdministrationServiceTest {
         assertFalse(service.setWhitelistEnabled(false));
     }
 
+    @Test void オンラインプレイヤーをセットアップ管理者にできる() {
+        FakeGateway gateway = new FakeGateway();
+        UUID playerId = UUID.randomUUID();
+        gateway.online.add(new OnlinePlayerView(playerId, "Player_1", false));
+        OnlinePlayerView updated = new DefaultServerAdministrationService(gateway).grantSetupAdministrator(playerId);
+        assertTrue(updated.setupAdministrator());
+        assertEquals(playerId, updated.uuid());
+    }
+
     @Test void 追加と削除が即座に一覧へ反映される() {
         FakeGateway gateway = new FakeGateway();
         var service = new DefaultServerAdministrationService(gateway);
@@ -51,6 +60,10 @@ class DefaultServerAdministrationServiceTest {
         final List<WhitelistEntryView> whitelist = new ArrayList<>();
         boolean enabled;
         public List<OnlinePlayerView> onlinePlayers(){return List.copyOf(online);}
+        public OnlinePlayerView grantSetupAdministrator(UUID playerId){
+            for (int index=0;index<online.size();index++) if (online.get(index).uuid().equals(playerId)) { var updated=new OnlinePlayerView(playerId,online.get(index).name(),true);online.set(index,updated);return updated; }
+            throw new ServerAdministrationException("PLAYER_NOT_ONLINE","指定されたプレイヤーは現在オンラインではありません。");
+        }
         public boolean whitelistEnabled(){return enabled;}
         public void setWhitelistEnabled(boolean value){enabled=value;}
         public List<WhitelistEntryView> whitelistedPlayers(){return List.copyOf(whitelist);}

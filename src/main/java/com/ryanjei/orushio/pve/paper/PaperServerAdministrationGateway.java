@@ -3,6 +3,7 @@ package com.ryanjei.orushio.pve.paper;
 import com.ryanjei.orushio.pve.application.*;
 import java.time.Duration;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 
 public final class PaperServerAdministrationGateway implements ServerAdministrationGateway {
@@ -27,6 +28,7 @@ public final class PaperServerAdministrationGateway implements ServerAdministrat
     }
 
     @Override public List<OnlinePlayerView> onlinePlayers() { return execute(server::onlinePlayers); }
+    @Override public OnlinePlayerView grantSetupAdministrator(UUID playerId) { return execute(() -> server.grantSetupAdministrator(playerId)); }
     @Override public boolean whitelistEnabled() { return execute(server::whitelistEnabled); }
     @Override public void setWhitelistEnabled(boolean enabled) { execute(() -> { server.setWhitelistEnabled(enabled); return null; }); }
     @Override public List<WhitelistEntryView> whitelistedPlayers() { return execute(server::whitelistedPlayers); }
@@ -46,6 +48,7 @@ public final class PaperServerAdministrationGateway implements ServerAdministrat
 
     private <T> T execute(Callable<T> task) {
         try { return executor.execute(task, timeout); }
+        catch (ServerAdministrationException exception) { throw exception; }
         catch (Exception exception) { throw unavailable(); }
     }
 

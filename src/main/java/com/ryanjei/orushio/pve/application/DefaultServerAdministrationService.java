@@ -4,6 +4,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.regex.Pattern;
+import java.util.UUID;
 
 public final class DefaultServerAdministrationService implements ServerAdministrationService {
     private static final Pattern PLAYER_NAME = Pattern.compile("[A-Za-z0-9_]{3,16}");
@@ -15,6 +16,10 @@ public final class DefaultServerAdministrationService implements ServerAdministr
 
     @Override public List<OnlinePlayerView> onlinePlayers() {
         return gateway.onlinePlayers().stream().sorted(Comparator.comparing(OnlinePlayerView::name, String.CASE_INSENSITIVE_ORDER)).toList();
+    }
+
+    @Override public synchronized OnlinePlayerView grantSetupAdministrator(UUID playerId) {
+        return gateway.grantSetupAdministrator(Objects.requireNonNull(playerId));
     }
 
     @Override public boolean whitelistEnabled() { return gateway.whitelistEnabled(); }

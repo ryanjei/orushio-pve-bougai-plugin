@@ -60,6 +60,21 @@ class PaperServerAdministrationGatewayTest {
         }
     }
 
+    @Test void 管理者付与はPaperメインスレッド上でオンラインUUIDだけを対象にする() {
+        TrackingExecutor executor = new TrackingExecutor();
+        UUID playerId = UUID.randomUUID();
+        PaperServerAccess server = new StubServerAccess() {
+            @Override public OnlinePlayerView grantSetupAdministrator(UUID requested) {
+                assertTrue(executor.insideMainThreadTask.get());
+                if (!playerId.equals(requested)) throw new ServerAdministrationException("PLAYER_NOT_ONLINE", "指定されたプレイヤーは現在オンラインではありません。");
+                return new OnlinePlayerView(playerId, "Player_1", true);
+            }
+        };
+        var gateway = new PaperServerAdministrationGateway(executor, name -> { throw new AssertionError(); }, server);
+        assertTrue(gateway.grantSetupAdministrator(playerId).setupAdministrator());
+        assertEquals("PLAYER_NOT_ONLINE", assertThrows(ServerAdministrationException.class, () -> gateway.grantSetupAdministrator(UUID.randomUUID())).code());
+    }
+
     private static final class TrackingExecutor implements GameThreadExecutor {
         final AtomicBoolean insideMainThreadTask = new AtomicBoolean();
         public <T> T execute(Callable<T> task, Duration timeout) throws Exception { insideMainThreadTask.set(true); try { return task.call(); } finally { insideMainThreadTask.set(false); } }
