@@ -12,6 +12,7 @@ public final class TemporaryWorldManager {
     private boolean startupRecoveryPrepared;
     private boolean startupRecoveryComplete = true;
     private MapIoException startupRecoveryFailure;
+    private OwnedWorld recoveryTarget;
     public TemporaryWorldManager(Path mapsRoot, Path worldContainer) { this.mapsRoot=mapsRoot.toAbsolutePath().normalize(); this.worldContainer=worldContainer.toAbsolutePath().normalize(); }
 
     public synchronized OwnedWorld create(MapProfile profile, String purpose) {
@@ -71,7 +72,10 @@ public final class TemporaryWorldManager {
 
     public synchronized List<Path> recoverOwnedWorlds() { List<Path> removed=new ArrayList<>(); for(OwnedWorld world:ownedWorlds()){delete(world);removed.add(world.directory());} return List.copyOf(removed); }
     public synchronized boolean startupRecoveryComplete() { return startupRecoveryComplete; }
-    public synchronized Optional<String> startupRecoveryWarning() { return Optional.ofNullable(startupRecoveryFailure).map(ignored -> "起動時の一時ワールド回収に失敗しました。手動確認が必要です。"); }
+    public synchronized void requireRecovery(OwnedWorld world,String reason) { recoveryTarget=Objects.requireNonNull(world); startupRecoveryFailure=new MapIoException("WORLD_RECOVERY",reason); }
+    public synchronized boolean recoveryRequired() { return startupRecoveryFailure!=null; }
+    public synchronized Optional<OwnedWorld> recoveryTarget() { return Optional.ofNullable(recoveryTarget); }
+    public synchronized Optional<String> startupRecoveryWarning() { if(startupRecoveryFailure==null)return Optional.empty();if(recoveryTarget!=null)return Optional.of("一時ワールド「"+recoveryTarget.worldName()+"」を安全に回収できません。再起動または手動確認が必要です。");return Optional.of("起動時の一時ワールド回収に失敗しました。手動確認が必要です。"); }
 
     private List<OwnedWorld> ownedWorlds() {
         if(!Files.isDirectory(worldContainer)) return List.of();

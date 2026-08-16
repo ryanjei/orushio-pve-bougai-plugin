@@ -84,7 +84,7 @@
 ## テスト一覧・結果
 
 - Phase 3関連: ZIP安全性、原本保護、一時コピー、所有削除・異常終了回収、MapProfile、YAML schema、選択、セットアップ、管理API/UIを確認し成功。
-- 全体回帰: 93件成功、0件失敗。
+- 全体回帰: 99件成功、0件失敗。
 - `gradlew build --no-daemon`: 成功。
 
 ## 実Paper E2E結果
@@ -137,3 +137,10 @@
 - setup保存・破棄はMAP_SETUP状態とsessionIdを破壊処理前に検証する。保存後のcleanup失敗時は従来Profileへrollbackし、draftとMAP_SETUP状態を維持する。
 - 管理者のonline・OP・権限はworldロード前に検証する。ロード後失敗はPaper側と呼出側の双方でアンロードを試行し、アンロード不能時は所有ディレクトリを削除しない。
 - `farmSpawn`、`combatEntry`、`finalCore`、`finalEntryTrigger`および`farmRegion`、`finalRegion`は再登録時に置換する。その他の複数地点・範囲は追加する。
+
+## 再レビュー集約修正
+
+- setup保存・破棄では、active-sessionのIDLE保存をworldのアンロード・削除より前に確定する。IDLE保存失敗時はProfileをrollbackし、MAP_SETUP、draft、所有worldを維持するため再試行できる。
+- IDLE確定後のアンロード・削除失敗は、対象OwnedWorldを回収対象として保持し、診断警告と`recoveryRequired`へ反映して新規setup/run world作成を拒否する。
+- partial loadでPaper側とService側のアンロードがともに失敗した場合は、所有ディレクトリを削除せず、MAP_SETUPとdraftを保持する。対象world名を診断警告へ表示する。
+- 既知API endpointごとの許可HTTP method表を追加した。認証およびmutation検証後、method不一致を405、未存在endpointを404として区別する。
