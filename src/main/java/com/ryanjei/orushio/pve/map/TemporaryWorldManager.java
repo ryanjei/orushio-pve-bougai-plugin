@@ -9,9 +9,14 @@ public final class TemporaryWorldManager {
     public record OwnedWorld(String worldName, MapProfileId mapId, String purpose, String ownershipId, Path directory) {}
     private static final String MARKER = ".orushio-world-owner";
     private final Path mapsRoot, worldContainer;
+    private boolean startupRecoveryPrepared;
+    private boolean startupRecoveryComplete = true;
+    private MapIoException startupRecoveryFailure;
     public TemporaryWorldManager(Path mapsRoot, Path worldContainer) { this.mapsRoot=mapsRoot.toAbsolutePath().normalize(); this.worldContainer=worldContainer.toAbsolutePath().normalize(); }
 
     public synchronized OwnedWorld create(MapProfile profile, String purpose) {
+        if (startupRecoveryFailure != null) throw new MapIoException("WORLD_RECOVERY", "起動時の一時ワールド回収に失敗したため新規作成できません。", startupRecoveryFailure);
+        if (!startupRecoveryComplete) throw new MapIoException("WORLD_RECOVERY_IN_PROGRESS", "起動時の一時ワールド回収中です。しばらく待ってください。");
         if(!Set.of("run","setup").contains(purpose)) throw new IllegalArgumentException("一時ワールド用途が不正です。");
         String ownership=UUID.randomUUID().toString(), name="orushio_"+purpose+"_"+ownership.replace("-","");
         Path source=mapsRoot.resolve(profile.mapId().value()).resolve(profile.templateDirectory()).normalize(), target=worldContainer.resolve(name).normalize();
@@ -37,7 +42,36 @@ public final class TemporaryWorldManager {
     }
 
     public synchronized boolean hasOwnedWorld(MapProfileId mapId) { return ownedWorlds().stream().anyMatch(world->world.mapId().equals(mapId)); }
+    public synchronized void prepareStartupRecovery() {
+        if (startupRecoveryPrepared) throw new IllegalStateException("起動時回収はすでに準備されています。");
+        startupRecoveryPrepared = true;
+        startupRecoveryComplete = false;
+    }
+
+    public List<Path> recoverPreparedWorlds() { return recoverPreparedWorlds(() -> {}); }
+
+    List<Path> recoverPreparedWorlds(Runnable afterSnapshot) {
+        List<OwnedWorld> stale;
+        synchronized (this) {
+            if (!startupRecoveryPrepared || startupRecoveryComplete) throw new IllegalStateException("起動時回収が準備されていません。");
+            stale = ownedWorlds();
+        }
+        try {
+            afterSnapshot.run();
+            List<Path> removed = new ArrayList<>();
+            for (OwnedWorld world : stale) { delete(world); removed.add(world.directory()); }
+            synchronized (this) { startupRecoveryComplete = true; }
+            return List.copyOf(removed);
+        } catch (Exception exception) {
+            MapIoException failure = exception instanceof MapIoException mapError ? mapError : new MapIoException("WORLD_RECOVERY", "起動時の一時ワールド回収に失敗しました。", exception);
+            synchronized (this) { startupRecoveryFailure = failure; startupRecoveryComplete = true; }
+            throw failure;
+        }
+    }
+
     public synchronized List<Path> recoverOwnedWorlds() { List<Path> removed=new ArrayList<>(); for(OwnedWorld world:ownedWorlds()){delete(world);removed.add(world.directory());} return List.copyOf(removed); }
+    public synchronized boolean startupRecoveryComplete() { return startupRecoveryComplete; }
+    public synchronized Optional<String> startupRecoveryWarning() { return Optional.ofNullable(startupRecoveryFailure).map(ignored -> "起動時の一時ワールド回収に失敗しました。手動確認が必要です。"); }
 
     private List<OwnedWorld> ownedWorlds() {
         if(!Files.isDirectory(worldContainer)) return List.of();

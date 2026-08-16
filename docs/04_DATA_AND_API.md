@@ -44,6 +44,8 @@ createdAt
 updatedAt
 ```
 
+Phase 3で永続化するMapProfile契約は、`mapId`、`displayName`、`enabled`、原本位置を示す`templateDirectory`、地点・範囲、`createdAt`である。`templateRevision`、`validationStatus`、`updatedAt`は実マップ更新・再検証を扱うPhase 6で追加する将来フィールドであり、Phase 3のschemaVersion 1には保存しない。未知の新しいschemaVersionを拒否する既存方針は維持する。
+
 地点は`x,y,z,yaw,pitch`、範囲は正規化済み`minX,minY,minZ,maxX,maxY,maxZ`で保存する。原本ワールド名やUUIDを地点ごとに重複保存せず、mapIdへ従属させる。
 
 ### GameSession
@@ -203,7 +205,7 @@ HTTPステータスを適切に使い、常に200でエラーを包まない。
 
 - mapId：英小文字、数字、ハイフン、1～40文字
 - 表示名：1～60文字
-- ZIP：上限は設定可能、初期2GB。展開後上限5GB、ファイル数100,000
+- ZIP：Phase 3の正式上限は512 MiB。展開後上限2 GiB、ファイル数20,000。HTTP受信とZIP検証は同じ定数を使用する。
 - 範囲：各軸と体積に上限。巨大範囲は警告または拒否
 - 数値：仕様の意味に応じたmin/maxをDTOで検証
 - 文字列：制御文字を拒否、HTML出力時にエスケープ

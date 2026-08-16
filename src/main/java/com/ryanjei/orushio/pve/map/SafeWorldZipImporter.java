@@ -8,7 +8,8 @@ import java.util.*;
 import java.util.zip.*;
 
 public final class SafeWorldZipImporter {
-    public record Limits(long maxZipBytes,long maxExpandedBytes,int maxFiles){public static Limits defaults(){return new Limits(512L*1024*1024,2L*1024*1024*1024,20_000);}}
+    public static final Limits DEFAULT_LIMITS=new Limits(512L*1024*1024,2L*1024*1024*1024,20_000);
+    public record Limits(long maxZipBytes,long maxExpandedBytes,int maxFiles){public static Limits defaults(){return DEFAULT_LIMITS;}}
     private final Path mapsRoot; private final Limits limits;
     public SafeWorldZipImporter(Path mapsRoot,Limits limits){this.mapsRoot=mapsRoot.toAbsolutePath().normalize();this.limits=limits;}
     public MapProfile importZip(Path zip,MapProfileId id,String displayName){Path map=mapsRoot.resolve(id.value()).normalize(),staging=mapsRoot.resolve(".import-"+UUID.randomUUID()).normalize();if(!map.getParent().equals(mapsRoot)||Files.exists(map))throw new MapIoException("MAP_EXISTS","同じmapIdがすでに存在します。");try{if(!Files.isRegularFile(zip)||Files.size(zip)==0||Files.size(zip)>limits.maxZipBytes())throw new MapIoException("ZIP_SIZE","ZIPサイズが許容範囲外です。");rejectSymlinkEntries(zip);Files.createDirectories(staging);extract(zip,staging);Path world=findWorld(staging);Files.createDirectories(map);SafeFiles.copyTree(world,map.resolve("template"));Files.writeString(map.resolve(".orushio-map-owner"),id.value(),StandardOpenOption.CREATE_NEW);MapProfile profile=new MapProfile(id,displayName,false,"template",Map.of(),Map.of(),Instant.now());new YamlMapProfileRepository(mapsRoot).save(profile);return profile;}catch(MapIoException error){safeDelete(map);throw error;}catch(Exception error){safeDelete(map);throw new MapIoException("INVALID_ZIP","ワールドZIPを登録できません。",error);}finally{safeDelete(staging);}}
