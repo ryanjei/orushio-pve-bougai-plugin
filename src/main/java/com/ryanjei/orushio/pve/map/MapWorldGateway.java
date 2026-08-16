@@ -1,0 +1,1 @@
+package com.ryanjei.orushio.pve.map;import java.util.UUID;public interface MapWorldGateway{void loadForSetup(TemporaryWorldManager.OwnedWorld world,UUID administrator);void unload(TemporaryWorldManager.OwnedWorld world);}

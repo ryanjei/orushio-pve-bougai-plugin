@@ -1,0 +1,1 @@
+package com.ryanjei.orushio.pve.map;public final class MapIoException extends RuntimeException{private final String code;public MapIoException(String code,String message){super(message);this.code=code;}public MapIoException(String code,String message,Throwable cause){super(message,cause);this.code=code;}public String code(){return code;}}

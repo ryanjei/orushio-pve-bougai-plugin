@@ -40,6 +40,8 @@ public final class DefaultGameApplicationService implements GameApplicationServi
         session = next;
         return result();
     }
+    public synchronized OperationResult startMapSetup(String expectedState){if(!session.state().name().equals(expectedState))conflict();GameSession next=session.transitionedTo(GameState.MAP_SETUP);repository.save(next);session=next;return result();}
+    public synchronized OperationResult closeMapSetup(String expectedSessionId){if(!session.sessionId().toString().equals(expectedSessionId))throw new DomainException("SESSION_MISMATCH","画面のセッションが現在のセッションと一致しません。");session.transitionedTo(GameState.IDLE);GameSession next=GameSession.newIdle();repository.save(next);session=next;return result();}
 
     private void conflict() { throw new DomainException("GAME_STATE_CONFLICT", "画面の状態が最新ではありません。再読み込みしてください。"); }
     private OperationResult result() { return new OperationResult(UUID.randomUUID().toString(), session.sessionId().toString(), session.state().name()); }

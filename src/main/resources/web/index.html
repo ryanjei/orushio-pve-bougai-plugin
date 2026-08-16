@@ -4,7 +4,7 @@
 <body>
 <aside><h1>Orushio PVE</h1><nav>
 <button data-page="home">ホーム</button><button data-page="game">ゲーム操作</button>
-<button disabled>マップ <small>後続Phase</small></button><button disabled>マップ設定 <small>後続Phase</small></button>
+<button data-page="maps-page">マップ管理</button><button disabled>マップ設定 <small>マップ管理画面から開始</small></button>
 <button disabled>バランス <small>後続Phase</small></button><button disabled>装備・ショップ <small>後続Phase</small></button>
 <button disabled>履歴・ログ <small>後続Phase</small></button><button data-page="system">システム</button>
 </nav></aside>
@@ -18,5 +18,6 @@
 <article class="panel"><h3>警告</h3><ul id="warnings" class="list compact"></ul></article>
 </section>
 <section id="game" hidden><article class="panel"><h3>ゲーム操作</h3><div class="actions"><button id="start">参加受付を開始</button><button id="close" class="warning">参加受付を終了</button></div><p>準備開始以降のゲーム機能は後続Phaseで利用できます。</p></article></section>
+<section id="maps-page" hidden><article class="panel"><h3>ワールドZIP登録</h3><form id="map-import-form"><label for="map-id">mapId（英小文字・数字・ハイフン）</label><input id="map-id" required pattern="[a-z0-9-]{1,40}"><label for="map-name">表示名</label><input id="map-name" required><label for="map-zip">Java版ワールドZIP</label><input id="map-zip" type="file" accept=".zip" required><button type="submit">安全に検証して登録</button></form></article><article class="panel"><div class="panel-title"><h3>登録済みマップ</h3><button id="maps-refresh" class="secondary">更新</button></div><div id="map-list"><p>読み込んでいます…</p></div></article><article class="panel"><h3>セットアップ</h3><label for="setup-admin">操作するオンライン管理者</label><select id="setup-admin"></select><div id="setup-status">開始されていません</div><div id="setup-fields" class="actions"><button data-field="farmRegion" data-area="true">ファーム範囲</button><button data-field="farmSpawn">ファーム開始地点</button><button data-field="combatEntry">攻略入口</button><button data-field="normalCoreCandidates">通常コア候補</button><button data-field="finalCore">最終コア</button><button data-field="gateRegions" data-area="true">最終ゲート範囲</button><button data-field="finalRegion" data-area="true">最終エリア範囲</button><button data-field="finalEntryTrigger">最終入口</button><button data-field="checkpoints" data-area="true">チェックポイント</button><button data-field="enemyZones" data-area="true">Enemy Zone範囲</button><button data-field="resourceZones" data-area="true">資源ゾーン</button><button data-field="shopPoints">ショップ地点</button></div><div class="actions"><button id="setup-save">保存終了</button><button id="setup-discard" class="danger">破棄終了</button></div></article></section>
 <section id="system" hidden><article class="panel"><h3>システム診断</h3><dl id="diagnostics"></dl></article></section>
 </main><script src="/app.js"></script></body></html>
