@@ -13,7 +13,7 @@ public final class PaperServerAdministrationGateway implements ServerAdministrat
     private final Duration timeout;
 
     public PaperServerAdministrationGateway(GameThreadExecutor executor) {
-        this(executor, new PaperPlayerIdentityResolver(executor), new BukkitServerAccess(new SetupAdministratorOwnership(org.bukkit.Bukkit.getPluginManager().getPlugin("OrushioPveBougai").getDataFolder().toPath(),org.bukkit.Bukkit.getWorldContainer().toPath())), Duration.ofSeconds(3));
+        this(executor, new PaperPlayerIdentityResolver(executor), new BukkitServerAccess(new SetupAdministratorOwnership(org.bukkit.Bukkit.getPluginManager().getPlugin("OrushioPveBougai").getDataFolder().toPath())), Duration.ofSeconds(3));
     }
 
     PaperServerAdministrationGateway(GameThreadExecutor executor, PlayerIdentityResolver identityResolver, PaperServerAccess server) {
@@ -30,6 +30,7 @@ public final class PaperServerAdministrationGateway implements ServerAdministrat
     @Override public List<OnlinePlayerView> onlinePlayers() { return execute(server::onlinePlayers); }
     @Override public OnlinePlayerView grantSetupAdministrator(UUID playerId) { return execute(() -> server.grantSetupAdministrator(playerId)); }
     @Override public OnlinePlayerView revokeSetupAdministrator(UUID playerId) { return execute(() -> server.revokeSetupAdministrator(playerId)); }
+    @Override public OnlinePlayerView adoptSetupAdministrator(UUID playerId) { return execute(() -> server.adoptSetupAdministrator(playerId)); }
     @Override public boolean whitelistEnabled() { return execute(server::whitelistEnabled); }
     @Override public void setWhitelistEnabled(boolean enabled) { execute(() -> { server.setWhitelistEnabled(enabled); return null; }); }
     @Override public List<WhitelistEntryView> whitelistedPlayers() { return execute(server::whitelistedPlayers); }

@@ -31,6 +31,7 @@ class DefaultServerAdministrationServiceTest {
         assertEquals(playerId, updated.uuid());
     }
     @Test void Orushio付与管理者を解除できる() {FakeGateway gateway=new FakeGateway();UUID id=UUID.randomUUID();gateway.online.add(new OnlinePlayerView(id,"Player_1",true));assertFalse(new DefaultServerAdministrationService(gateway).revokeSetupAdministrator(id).setupAdministrator());}
+    @Test void 既存OPを明示的に引き継げる(){FakeGateway gateway=new FakeGateway();UUID id=UUID.randomUUID();gateway.online.add(new OnlinePlayerView(id,"LegacyOp",true,false));var adopted=new DefaultServerAdministrationService(gateway).adoptSetupAdministrator(id);assertTrue(adopted.setupAdministrator());assertTrue(adopted.administratorRevocable());}
 
     @Test void 追加と削除が即座に一覧へ反映される() {
         FakeGateway gateway = new FakeGateway();
@@ -66,6 +67,7 @@ class DefaultServerAdministrationServiceTest {
             throw new ServerAdministrationException("PLAYER_NOT_ONLINE","指定されたプレイヤーは現在オンラインではありません。");
         }
         public OnlinePlayerView revokeSetupAdministrator(UUID playerId){for(int index=0;index<online.size();index++)if(online.get(index).uuid().equals(playerId)){var updated=new OnlinePlayerView(playerId,online.get(index).name(),false);online.set(index,updated);return updated;}throw new ServerAdministrationException("PLAYER_NOT_ONLINE","指定されたプレイヤーは現在オンラインではありません。");}
+        public OnlinePlayerView adoptSetupAdministrator(UUID playerId){for(int index=0;index<online.size();index++)if(online.get(index).uuid().equals(playerId)&&online.get(index).setupAdministrator()){var updated=new OnlinePlayerView(playerId,online.get(index).name(),true,true);online.set(index,updated);return updated;}throw new ServerAdministrationException("PLAYER_NOT_ONLINE","指定されたプレイヤーは現在オンラインではありません。");}
         public boolean whitelistEnabled(){return enabled;}
         public void setWhitelistEnabled(boolean value){enabled=value;}
         public List<WhitelistEntryView> whitelistedPlayers(){return List.copyOf(whitelist);}

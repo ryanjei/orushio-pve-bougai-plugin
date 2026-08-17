@@ -7,6 +7,7 @@ public interface ServerAdministrationService {
     List<OnlinePlayerView> onlinePlayers();
     default OnlinePlayerView grantSetupAdministrator(UUID playerId) { throw new UnsupportedOperationException(); }
     default OnlinePlayerView revokeSetupAdministrator(UUID playerId) { throw new UnsupportedOperationException(); }
+    default OnlinePlayerView adoptSetupAdministrator(UUID playerId) { throw new UnsupportedOperationException(); }
     boolean whitelistEnabled();
     boolean setWhitelistEnabled(boolean enabled);
     List<WhitelistEntryView> whitelistedPlayers();

@@ -75,6 +75,7 @@ class PaperServerAdministrationGatewayTest {
         assertEquals("PLAYER_NOT_ONLINE", assertThrows(ServerAdministrationException.class, () -> gateway.grantSetupAdministrator(UUID.randomUUID())).code());
     }
     @Test void 管理者解除もPaperメインスレッドを経由する() {TrackingExecutor executor=new TrackingExecutor();UUID id=UUID.randomUUID();PaperServerAccess server=new StubServerAccess(){@Override public OnlinePlayerView revokeSetupAdministrator(UUID requested){assertTrue(executor.insideMainThreadTask.get());assertEquals(id,requested);return new OnlinePlayerView(id,"Player_1",false);}};assertFalse(new PaperServerAdministrationGateway(executor,name->{throw new AssertionError();},server).revokeSetupAdministrator(id).setupAdministrator());}
+    @Test void 管理者ownership引継ぎもPaperメインスレッドを経由する(){TrackingExecutor executor=new TrackingExecutor();UUID id=UUID.randomUUID();PaperServerAccess server=new StubServerAccess(){@Override public OnlinePlayerView adoptSetupAdministrator(UUID requested){assertTrue(executor.insideMainThreadTask.get());assertEquals(id,requested);return new OnlinePlayerView(id,"LegacyOp",true,true);}};assertTrue(new PaperServerAdministrationGateway(executor,name->{throw new AssertionError();},server).adoptSetupAdministrator(id).administratorRevocable());}
 
     private static final class TrackingExecutor implements GameThreadExecutor {
         final AtomicBoolean insideMainThreadTask = new AtomicBoolean();
