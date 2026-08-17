@@ -176,8 +176,20 @@
 - 初回だけMinecraft EULAを表示し、利用者が明示的に同意した場合のみ`eula=true`を作成する。
 - プラグインは2分・1回限りのbootstrap URLを`admin-bootstrap.url`へ原子的に発行する。起動補助は読み取り後に削除し、localhost URLだけを既定ブラウザで開く。
 - 起動失敗は日本語で原因と確認先を表示し、`START_SERVER.bat`がウィンドウを閉じずに待機する。
-- BAT自身がPowerShell起動前に目視メッセージを表示し、script欠損、PowerShell欠損・異常終了を検出して必ず停止表示する。
-- Windows向けBATはUTF-8（BOMなし）・CRLFで管理し、起動処理は`.runtime/paper/logs/launcher.log`へ記録する。
+- BATはASCII・CRLFの薄い起動ラッパーとし、利用者向けの日本語表示と起動処理はPowerShell側へ集約する。記録は`.runtime/paper/logs/launcher.log`へ保存する。
 - ユーザー実機受入前には、Repository入口、初回・2回目起動、意図的失敗、管理画面到達、Phase 1〜3簡易回帰をPreflightとして確認し、GUIで未確認の項目を成功扱いしない。
-- 終了は起動ウィンドウで`Ctrl+C`を1回押し、Paperのshutdown処理を完了させる。
-- Windows実機確認では、Java 21自動検出、最新build、Paper取得・検証、配置JAR一致、Paper Ready、bootstrap認証303、同一token再利用401、`stop`による正常終了コード0を確認した。
+- 終了は起動ウィンドウの`Y`キーをランチャーが受け取り、localhost限定・1回限りtoken付きの`POST /launcher/shutdown`を通じてPaperメインスレッドで`Server#shutdown()`を実行する。Paper stdinへは停止コマンドを送信しない。
+- Windows実機確認では、実Yキー入力、HTTP安全停止、`SYSTEM_SHUTDOWN_REQUESTED`、world保存、plugin disable、RegionFile I/O完了、Paper終了コード0、BAT文字化けエラーがないことを確認した。
+
+## Phase 3正式受入
+
+- 受入日：2026-08-17
+- 最終受入commit：`cd0b2c36183cc2bb27b13e5e37a727f8e9bde5a6`
+- ChatGPT最終コードレビューとユーザーWindows実機E2EをPASSし、Phase 3 Acceptedとする。
+
+## 後続PhaseへのUI持ち越しTODO
+
+- Minecraft側の設定変更後、画面全体を暗転させず該当セットアップ座標コンポーネントだけを再取得する。
+- 座標一覧と設定開始ボタンを同じ項目コンポーネントへ統合し、登録値、追加、テレポート、削除を一箇所で扱う案を、仕様確定後に検討する。
+- Yaw / Pitchの生数値より「向き：東」「視線：水平」等を優先し、数値を詳細表示として残すかは後続UI仕様で決定する。
+- 利用者向け新規表示名は`OPBP`を使い、Java package、plugin内部名、data folder、NamespacedKey、PDC key、audit code、schema、永続パスは別migrationなしにrenameしない。
