@@ -27,4 +27,5 @@ class StartupStateTest {
         StartupState startup=StartupState.load(temp);assertTrue(startup.diagnosticMode());assertTrue(startup.recoveryRequired());assertEquals(value,Files.readString(path));
     }
     @Test void activeSession不在は正常なIDLE初期状態として扱う(){StartupState startup=StartupState.load(temp);assertFalse(startup.diagnosticMode());assertTrue(startup.sessionLoaded());assertTrue(startup.session().isEmpty());}
+    @Test void 進行中activeSessionは勝手に待機へ戻さず復旧診断モードになる(){Path path=temp.resolve("sessions/active.yml");var repository=new YamlActiveSessionRepository(path);var session=GameSession.idle().transitionedTo(com.ryanjei.orushio.pve.domain.GameState.PREPARING);repository.save(session);StartupState startup=StartupState.load(temp);assertTrue(startup.diagnosticMode());assertTrue(startup.recoveryRequired());assertEquals("PREPARING",startup.session().orElseThrow().state().name());assertTrue(startup.warnings().stream().anyMatch(value->value.contains("復旧")));}
 }

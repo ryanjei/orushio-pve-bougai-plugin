@@ -1,6 +1,7 @@
 package com.ryanjei.orushio.pve.bootstrap;
 
 import com.ryanjei.orushio.pve.domain.GameSession;
+import com.ryanjei.orushio.pve.domain.GameState;
 import com.ryanjei.orushio.pve.persistence.YamlActiveSessionRepository;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -22,6 +23,10 @@ public record StartupState(
         Optional<GameSession> session = Optional.empty();
         try {
             session = new YamlActiveSessionRepository(dataFolder.resolve("sessions/active.yml")).load();
+            if(session.isPresent()&&java.util.EnumSet.of(GameState.PREPARING,GameState.ACTIVE,GameState.PAUSED,GameState.CLEAR,GameState.ABORTING,GameState.RECOVERING).contains(session.get().state())){
+                recoveryRequired=true;
+                warnings.add("前回のゲームセッションが終了していません。復旧が完了するまで新しいゲームを開始できません。");
+            }
         } catch (RuntimeException e) {
             sessionLoaded = false;
             recoveryRequired = true;

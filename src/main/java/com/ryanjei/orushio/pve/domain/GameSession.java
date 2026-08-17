@@ -1,38 +1,25 @@
 package com.ryanjei.orushio.pve.domain;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
+import java.time.*;
+import java.util.*;
 
 public final class GameSession {
-    private final UUID sessionId;
-    private final GameState state;
-    private final List<Participant> participants;
-    private final Instant createdAt;
-
-    public GameSession(UUID sessionId, GameState state, List<Participant> participants, Instant createdAt) {
-        this.sessionId = Objects.requireNonNull(sessionId);
-        this.state = Objects.requireNonNull(state);
-        this.participants = List.copyOf(participants);
-        this.createdAt = Objects.requireNonNull(createdAt);
-    }
-
-    public static GameSession idle() {
-        return new GameSession(UUID.randomUUID(), GameState.IDLE, List.of(), Instant.now());
-    }
-
-    public GameSession transitionedTo(GameState next) {
-        if (!state.canTransitionTo(next)) {
-            throw new DomainException("GAME_STATE_CONFLICT", "現在の状態「" + state + "」から「" + next + "」へ変更できません。");
-        }
-        return new GameSession(sessionId, next, participants, createdAt);
-    }
-
-    public static GameSession newIdle() { return idle(); }
-
-    public UUID sessionId() { return sessionId; }
-    public GameState state() { return state; }
-    public List<Participant> participants() { return participants; }
-    public Instant createdAt() { return createdAt; }
+    private final UUID sessionId;private final GameState state;private final List<Participant> participants;private final Instant createdAt;
+    private final String mapId;private final int participantCountAtStart;private final int timeLimitMinutes;private final int requiredNormalCores;private final double enemyMultiplier;private final Instant activeAt;private final Instant endsAt;private final Set<UUID> pendingCleanup;
+    public GameSession(UUID sessionId,GameState state,List<Participant> participants,Instant createdAt){this(sessionId,state,participants,createdAt,"",0,60,2,1.0,null,null,Set.of());}
+    public GameSession(UUID sessionId,GameState state,List<Participant> participants,Instant createdAt,String mapId,int participantCountAtStart,int timeLimitMinutes,int requiredNormalCores,double enemyMultiplier,Instant activeAt,Instant endsAt,Set<UUID> pendingCleanup){this.sessionId=Objects.requireNonNull(sessionId);this.state=Objects.requireNonNull(state);this.participants=List.copyOf(participants);this.createdAt=Objects.requireNonNull(createdAt);this.mapId=mapId==null?"":mapId;if(participantCountAtStart<0||participantCountAtStart>1000)throw new IllegalArgumentException("開始時参加人数が範囲外です。");if(timeLimitMinutes<1||timeLimitMinutes>1440)throw new IllegalArgumentException("制限時間が範囲外です。");if(requiredNormalCores<1||requiredNormalCores>1000)throw new IllegalArgumentException("攻略通常コア数が範囲外です。");if(!Double.isFinite(enemyMultiplier)||enemyMultiplier<0.01||enemyMultiplier>100)throw new IllegalArgumentException("敵人数倍率が範囲外です。");Set<UUID> participantIds=new HashSet<>();for(Participant participant:this.participants)if(!participantIds.add(participant.playerUuid()))throw new IllegalArgumentException("ゲーム参加者が重複しています。");if((activeAt==null)!=(endsAt==null)||activeAt!=null&&!endsAt.isAfter(activeAt))throw new IllegalArgumentException("ゲーム時刻が不正です。");this.participantCountAtStart=participantCountAtStart;this.timeLimitMinutes=timeLimitMinutes;this.requiredNormalCores=requiredNormalCores;this.enemyMultiplier=enemyMultiplier;this.activeAt=activeAt;this.endsAt=endsAt;this.pendingCleanup=Set.copyOf(pendingCleanup);}
+    public static GameSession idle(){return new GameSession(UUID.randomUUID(),GameState.IDLE,List.of(),Instant.now());}
+    public static GameSession newIdle(){return idle();}
+    public static GameSession idleWithPending(Set<UUID> pending){return new GameSession(UUID.randomUUID(),GameState.IDLE,List.of(),Instant.now(),"",0,60,2,1.0,null,null,pending);}
+    public GameSession transitionedTo(GameState next){if(!state.canTransitionTo(next))throw new DomainException("GAME_STATE_CONFLICT","現在の状態「"+state+"」から「"+next+"」へ変更できません。");return copy(next,participants,mapId,participantCountAtStart,timeLimitMinutes,requiredNormalCores,enemyMultiplier,activeAt,endsAt,pendingCleanup);}
+    public GameSession withParticipant(UUID id,String name){if(state!=GameState.IDLE&&state!=GameState.RECRUITING)throw new DomainException("GAME_STATE_CONFLICT","ゲーム開始後に新しい参加者を追加できません。");if(participants.stream().anyMatch(p->p.playerUuid().equals(id)))return this;List<Participant> next=new ArrayList<>(participants);next.add(new Participant(id,name,true));return copy(state,next,mapId,participantCountAtStart,timeLimitMinutes,requiredNormalCores,enemyMultiplier,activeAt,endsAt,pendingCleanup);}
+    public GameSession withoutParticipant(UUID id){if(state!=GameState.IDLE&&state!=GameState.RECRUITING)throw new DomainException("GAME_STATE_CONFLICT","ゲーム開始後に参加者を解除できません。");List<Participant> next=participants.stream().filter(p->!p.playerUuid().equals(id)).toList();return copy(state,next,mapId,participantCountAtStart,timeLimitMinutes,requiredNormalCores,enemyMultiplier,activeAt,endsAt,pendingCleanup);}
+    public GameSession withConnection(UUID id,String name,boolean connected){List<Participant> next=participants.stream().map(p->p.playerUuid().equals(id)?new Participant(id,name==null?p.lastKnownName():name,connected):p).toList();return copy(state,next,mapId,participantCountAtStart,timeLimitMinutes,requiredNormalCores,enemyMultiplier,activeAt,endsAt,pendingCleanup);}
+    public GameSession prepared(String selectedMap,int minutes,int cores,double multiplier){if(participants.isEmpty())throw new DomainException("PARTICIPANT_REQUIRED","ゲーム参加者を1人以上選択してください。");GameSession preparing=transitionedTo(GameState.PREPARING);return preparing.copy(GameState.PREPARING,participants,selectedMap,participants.size(),minutes,cores,multiplier,null,null,pendingCleanup);}
+    public GameSession activated(Instant now){GameSession active=transitionedTo(GameState.ACTIVE);return active.copy(GameState.ACTIVE,participants,mapId,participantCountAtStart,timeLimitMinutes,requiredNormalCores,enemyMultiplier,now,now.plus(Duration.ofMinutes(timeLimitMinutes)),pendingCleanup);}
+    public GameSession withPendingCleanup(Set<UUID> ids){return copy(state,participants,mapId,participantCountAtStart,timeLimitMinutes,requiredNormalCores,enemyMultiplier,activeAt,endsAt,ids);}
+    public boolean isParticipant(UUID id){return participants.stream().anyMatch(p->p.playerUuid().equals(id));}
+    public Duration remainingAt(Instant now){if(endsAt==null)return Duration.ZERO;Duration value=Duration.between(now,endsAt);return value.isNegative()?Duration.ZERO:value;}
+    private GameSession copy(GameState s,List<Participant> p,String map,int count,int minutes,int cores,double multiplier,Instant active,Instant ends,Set<UUID> pending){return new GameSession(sessionId,s,p,createdAt,map,count,minutes,cores,multiplier,active,ends,pending);}
+    public UUID sessionId(){return sessionId;}public GameState state(){return state;}public List<Participant> participants(){return participants;}public Instant createdAt(){return createdAt;}public String mapId(){return mapId;}public int participantCountAtStart(){return participantCountAtStart;}public int timeLimitMinutes(){return timeLimitMinutes;}public int requiredNormalCores(){return requiredNormalCores;}public double enemyMultiplier(){return enemyMultiplier;}public Optional<Instant> activeAt(){return Optional.ofNullable(activeAt);}public Optional<Instant> endsAt(){return Optional.ofNullable(endsAt);}public Set<UUID> pendingCleanup(){return pendingCleanup;}
 }

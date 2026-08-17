@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 class GameStateTest {
     @Test void 仕様どおりの遷移だけを許可する() {
         Map<GameState, Set<GameState>> expected = Map.of(
-            GameState.IDLE, Set.of(GameState.RECRUITING, GameState.MAP_SETUP),
+            GameState.IDLE, Set.of(GameState.RECRUITING, GameState.PREPARING, GameState.MAP_SETUP),
             GameState.RECRUITING, Set.of(GameState.PREPARING, GameState.IDLE),
             GameState.PREPARING, Set.of(GameState.ACTIVE, GameState.ABORTING),
             GameState.ACTIVE, Set.of(GameState.PAUSED, GameState.CLEAR, GameState.ABORTING),

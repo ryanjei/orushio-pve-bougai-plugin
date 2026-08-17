@@ -1,0 +1,30 @@
+package com.ryanjei.orushio.pve.http;
+
+import com.ryanjei.orushio.pve.application.*;
+import com.ryanjei.orushio.pve.domain.*;
+import com.ryanjei.orushio.pve.security.AuthService;
+import org.junit.jupiter.api.*;
+
+import java.net.*;
+import java.net.http.*;
+import java.time.Instant;
+import java.util.*;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class GameLifecycleHttpServerTest {
+    AdminHttpServer server; HttpClient client; String base,cookie,csrf; FakeGames games;
+    @BeforeEach void start()throws Exception{games=new FakeGames();server=new AdminHttpServer(InetAddress.getByName("127.0.0.1"),0,games,new EmptyAdmin(),new AuthService(),Map::of);server.start();client=HttpClient.newHttpClient();base="http://127.0.0.1:"+server.port();String token=server.issueBootstrapToken();var response=client.send(HttpRequest.newBuilder(URI.create(base+"/auth/bootstrap")).header("X-Bootstrap-Token",token).POST(HttpRequest.BodyPublishers.noBody()).build(),HttpResponse.BodyHandlers.ofString());cookie=response.headers().firstValue("Set-Cookie").orElseThrow().split(";",2)[0];csrf=extract(response.body(),"csrfToken");}
+    @AfterEach void stop(){server.close();}
+
+    @Test void lifecycle取得は日本語状態と残り時間項目を返す()throws Exception{var response=get("/api/v1/game/lifecycle");assertEquals(200,response.statusCode());assertTrue(response.body().contains("待機中"));assertTrue(response.body().contains("remainingSeconds"));}
+    @Test void participantMutationは認証OriginCsrfを必須にする()throws Exception{UUID id=UUID.randomUUID();String body="{\"uuid\":\""+id+"\"}";assertEquals(200,mutate("/api/v1/game/lifecycle/participants","PUT",body,csrf).statusCode());var unauth=HttpRequest.newBuilder(URI.create(base+"/api/v1/game/lifecycle/participants")).header("Origin",base).header("X-CSRF-Token",csrf).PUT(HttpRequest.BodyPublishers.ofString(body)).build();assertEquals(401,client.send(unauth,HttpResponse.BodyHandlers.ofString()).statusCode());assertEquals(403,mutate("/api/v1/game/lifecycle/participants","PUT",body,"bad").statusCode());}
+    @Test void 既知endpointの誤methodは405で未知endpointは404()throws Exception{assertEquals(405,mutate("/api/v1/game/lifecycle","POST","{}",csrf).statusCode());assertEquals(404,get("/api/v1/game/lifecycle/not-found").statusCode());}
+    @Test void 診断モードはlifecycleMutationを拒否する()throws Exception{try(AdminHttpServer diagnostic=new AdminHttpServer(InetAddress.getByName("127.0.0.1"),0,games,new EmptyAdmin(),new AuthService(),Map::of,new NoAudit(),true)){diagnostic.start();String b="http://127.0.0.1:"+diagnostic.port(),token=diagnostic.issueBootstrapToken();var auth=client.send(HttpRequest.newBuilder(URI.create(b+"/auth/bootstrap")).header("X-Bootstrap-Token",token).POST(HttpRequest.BodyPublishers.noBody()).build(),HttpResponse.BodyHandlers.ofString());String c=auth.headers().firstValue("Set-Cookie").orElseThrow().split(";",2)[0],xs=extract(auth.body(),"csrfToken");var request=HttpRequest.newBuilder(URI.create(b+"/api/v1/game/lifecycle/participants")).header("Cookie",c).header("Origin",b).header("X-CSRF-Token",xs).PUT(HttpRequest.BodyPublishers.ofString("{\"uuid\":\""+UUID.randomUUID()+"\"}")).build();assertEquals(503,client.send(request,HttpResponse.BodyHandlers.ofString()).statusCode());}}
+    HttpResponse<String> get(String path)throws Exception{return client.send(HttpRequest.newBuilder(URI.create(base+path)).header("Cookie",cookie).GET().build(),HttpResponse.BodyHandlers.ofString());}
+    HttpResponse<String> mutate(String path,String method,String body,String csrfValue)throws Exception{return client.send(HttpRequest.newBuilder(URI.create(base+path)).header("Cookie",cookie).header("Origin",base).header("X-CSRF-Token",csrfValue).method(method,HttpRequest.BodyPublishers.ofString(body)).build(),HttpResponse.BodyHandlers.ofString());}
+    static String extract(String json,String key){String marker="\""+key+"\":\"";int start=json.indexOf(marker)+marker.length();return json.substring(start,json.indexOf('"',start));}
+    static final class FakeGames implements GameApplicationService{GameSession session=GameSession.idle();public GameSession current(){return session;}public OperationResult startRecruiting(String s){throw new UnsupportedOperationException();}public OperationResult closeRecruiting(String s){throw new UnsupportedOperationException();}public OperationResult startMapSetup(String s){throw new UnsupportedOperationException();}public void validateMapSetup(String s){}public OperationResult closeMapSetup(String s){throw new UnsupportedOperationException();}public GameSession addParticipant(UUID id){session=session.withParticipant(id,"Player");return session;}public GameSession removeParticipant(UUID id){session=session.withoutParticipant(id);return session;}public GameStartView startView(String id){return new GameStartView(id,"Map",List.of(),GameLaunchSettings.defaults(),60,2,1.0,false,List.of("参加者が必要です。"));}public GameLaunchSettings saveLaunchSettings(String id,GameLaunchSettings value){return value;}public OperationResult prepareGame(String s,String id){return result();}public OperationResult activateGame(String s,Instant now){return result();}public OperationResult abortGame(String s,String reason){return result();}private OperationResult result(){return new OperationResult("op",session.sessionId().toString(),session.state().name());}}
+    static final class EmptyAdmin implements ServerAdministrationService{public List<OnlinePlayerView> onlinePlayers(){return List.of();}public boolean whitelistEnabled(){return false;}public boolean setWhitelistEnabled(boolean value){return value;}public List<WhitelistEntryView> whitelistedPlayers(){return List.of();}public WhitelistEntryView addWhitelistedPlayer(String name){throw new UnsupportedOperationException();}public void removeWhitelistedPlayer(String name){}}
+    static final class NoAudit implements com.ryanjei.orushio.pve.logging.AuditSink{public void record(String a,String b,String c,String d){}public boolean healthy(){return true;}}
+}
