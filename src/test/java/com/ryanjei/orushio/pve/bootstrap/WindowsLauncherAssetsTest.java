@@ -13,7 +13,6 @@ class WindowsLauncherAssetsTest {
     @Test void repositoryTopLevelHasVisibleOneClickLauncherAndRuntimeIsIgnored() throws Exception {
         byte[] bytes=Files.readAllBytes(Path.of("START_SERVER.bat"));
         String bat=new String(bytes,StandardCharsets.UTF_8),ignore=Files.readString(Path.of(".gitignore")),attributes=Files.readString(Path.of(".gitattributes"));
-        assertTrue(bat.contains("OPBP サーバーを起動しています"));
         assertTrue(bat.contains("scripts\\start-server.ps1"));
         assertTrue(bat.contains("if not exist \"%ORUSHIO_SCRIPT%\""));
         assertTrue(bat.contains("if not exist \"%ORUSHIO_POWERSHELL%\""));
@@ -27,14 +26,20 @@ class WindowsLauncherAssetsTest {
         Process process=new ProcessBuilder("cmd.exe","/d","/c",bat.toString()).redirectErrorStream(true).start();
         process.getOutputStream().write(System.lineSeparator().getBytes(StandardCharsets.UTF_8));process.getOutputStream().close();
         assertTrue(process.waitFor(10,TimeUnit.SECONDS));String output=new String(process.getInputStream().readAllBytes(),StandardCharsets.UTF_8);
-        assertNotEquals(0,process.exitValue());assertTrue(output.contains("OPBP"));assertTrue(output.contains("start-server.ps1"));
+        assertNotEquals(0,process.exitValue());assertTrue(output.contains("Launcher failed"));assertFalse(output.contains("is not recognized as an internal or external command"));
     }
 
     @Test void nonZeroPowerShellExitProducesReadableErrorAndPausePath() throws Exception {
         Path bat=temp.resolve("START_SERVER.bat"),scripts=Files.createDirectories(temp.resolve("scripts"));Files.copy(Path.of("START_SERVER.bat"),bat);Files.writeString(scripts.resolve("start-server.ps1"),"Write-Host 'POWERSHELL_FAILURE'; exit 7",StandardCharsets.US_ASCII);
         Process process=new ProcessBuilder("cmd.exe","/d","/c",bat.toString()).redirectErrorStream(true).start();process.getOutputStream().write(System.lineSeparator().getBytes(StandardCharsets.UTF_8));process.getOutputStream().close();
         assertTrue(process.waitFor(15,TimeUnit.SECONDS));String output=new String(process.getInputStream().readAllBytes(),StandardCharsets.UTF_8);
-        assertNotEquals(0,process.exitValue());assertTrue(output.contains("POWERSHELL_FAILURE"));assertTrue(output.contains("7"));assertTrue(output.contains("ウィンドウ"));
+        assertNotEquals(0,process.exitValue());assertTrue(output.contains("POWERSHELL_FAILURE"));assertTrue(output.contains("Launcher failed"));assertFalse(output.contains("is not recognized as an internal or external command"));
+    }
+
+    @Test void successfulPowerShellReturnHasNoBatchMojibakeOrCommandError() throws Exception {
+        Path bat=temp.resolve("START_SERVER.bat"),scripts=Files.createDirectories(temp.resolve("scripts"));Files.copy(Path.of("START_SERVER.bat"),bat);Files.writeString(scripts.resolve("start-server.ps1"),"Write-Host 'POWERSHELL_SUCCESS'; exit 0",StandardCharsets.US_ASCII);
+        Process process=new ProcessBuilder("cmd.exe","/d","/c",bat.toString()).redirectErrorStream(true).start();assertTrue(process.waitFor(15,TimeUnit.SECONDS));String output=new String(process.getInputStream().readAllBytes(),StandardCharsets.UTF_8);
+        assertEquals(0,process.exitValue());assertTrue(output.contains("POWERSHELL_SUCCESS"));assertFalse(output.contains("is not recognized as an internal or external command"));
     }
 
     @Test void launcherBuildsBeforeDeployAndExplainsAllRequiredFailures() throws Exception {
@@ -48,5 +53,5 @@ class WindowsLauncherAssetsTest {
         String script=Files.readString(Path.of("scripts/start-server.ps1")),opener=Files.readString(Path.of("scripts/open-admin.ps1"));
         assertTrue(script.contains("paper-1.21.11-132.jar"));assertTrue(script.contains("5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba"));assertTrue(script.contains("Security.Cryptography.SHA256"));assertTrue(opener.contains("http://127.0.0.1:8765/auth/bootstrap?token=*"));assertTrue(opener.indexOf("Remove-Item -LiteralPath $Handoff")<opener.indexOf("Start-Process $url"));assertTrue(opener.contains("管理画面の準備が120秒以内"));assertTrue(opener.contains("既定ブラウザの設定"));assertFalse(script.contains("secrets.yml"));
     }
-    @Test void launcherUsesAuthenticatedPluginShutdownWithoutStdinOrKill()throws Exception{String script=Files.readString(Path.of("scripts/start-server.ps1"));assertTrue(script.contains("Y キーを押してください"));assertTrue(script.contains("/launcher/shutdown"));assertTrue(script.contains("X-OPBP-Shutdown-Token"));assertTrue(script.contains("StatusCode -ne 202"));assertTrue(script.contains("安全停止を要求できませんでした。サーバーはまだ稼働しています"));assertTrue(script.contains("データ保護のため強制終了せず待機します"));assertFalse(script.contains("RedirectStandardInput"));assertFalse(script.contains("StandardInput."));assertFalse(script.contains("stopBytes"));assertFalse(script.contains("Stop-Process"));assertFalse(script.contains("Write-Host $shutdownToken"));assertTrue(script.contains("$paperProcess.WaitForExit"));assertTrue(script.contains("Paper終了コード=$paperExit"));assertTrue(script.contains("OPBPサーバーを安全に停止しました"));assertTrue(script.contains("Paperが異常終了しました"));assertTrue(script.contains("CtrlPressed")||script.contains("ConsoleModifiers]::Control"));assertFalse(script.contains("bootstrap?token="));assertFalse(script.contains("installationSecret"));}
+    @Test void launcherSeparatesPaperInputAndUsesAuthenticatedShutdownWithoutStopOrKill()throws Exception{String script=Files.readString(Path.of("scripts/start-server.ps1"));assertTrue(script.contains("Y キーを押してください"));assertTrue(script.contains("/launcher/shutdown"));assertTrue(script.contains("X-OPBP-Shutdown-Token"));assertTrue(script.contains("StatusCode -ne 202"));assertTrue(script.contains("安全停止を要求できませんでした。サーバーはまだ稼働しています"));assertTrue(script.contains("データ保護のため強制終了せず待機します"));assertTrue(script.contains("RedirectStandardInput=$true"));assertTrue(script.contains("$paperProcess.StandardInput.Close()"));assertFalse(script.contains("StandardInput.Write"));assertFalse(script.contains("BaseStream"));assertFalse(script.contains("stopBytes"));assertFalse(script.contains("Stop-Process"));assertFalse(script.contains("Write-Host $shutdownToken"));assertTrue(script.contains("$paperProcess.WaitForExit"));assertTrue(script.contains("Paper終了コード=$paperExit"));assertTrue(script.contains("OPBPサーバーを安全に停止しました"));assertTrue(script.contains("Paperが異常終了しました"));assertTrue(script.contains("CtrlPressed")||script.contains("ConsoleModifiers]::Control"));assertFalse(script.contains("bootstrap?token="));assertFalse(script.contains("installationSecret"));}
 }

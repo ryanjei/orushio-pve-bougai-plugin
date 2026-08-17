@@ -93,14 +93,15 @@ try {
     Remove-Item -LiteralPath $shutdownHandoff -Force -ErrorAction SilentlyContinue
     if ($PrepareOnly) { Write-Host '起動準備確認が完了しました。'; Stop-Transcript | Out-Null; exit 0 }
 
-    if (-not $NoBrowser) { Show-Step '認証済み管理画面の自動表示を準備しています。';$opener=Join-Path $PSScriptRoot 'open-admin.ps1';if(-not(Test-Path -LiteralPath $opener)){Stop-WithMessage '管理画面起動処理 scripts\open-admin.ps1 が見つかりません。Repositoryのファイル一式を確認してください。'};$arguments='-NoProfile -ExecutionPolicy Bypass -File "'+$opener+'" -Handoff "'+$handoff+'"';try{Start-Process powershell.exe -WindowStyle Hidden -ArgumentList $arguments -ErrorAction Stop | Out-Null}catch{Stop-WithMessage '管理画面起動処理を開始できませんでした。Windows PowerShellが利用可能か確認してください。'} }
+    if (-not $NoBrowser -and $env:ORUSHIO_PREFLIGHT_NO_BROWSER -ne '1') { Show-Step '認証済み管理画面の自動表示を準備しています。';$opener=Join-Path $PSScriptRoot 'open-admin.ps1';if(-not(Test-Path -LiteralPath $opener)){Stop-WithMessage '管理画面起動処理 scripts\open-admin.ps1 が見つかりません。Repositoryのファイル一式を確認してください。'};$arguments='-NoProfile -ExecutionPolicy Bypass -File "'+$opener+'" -Handoff "'+$handoff+'"';try{Start-Process powershell.exe -WindowStyle Hidden -ArgumentList $arguments -ErrorAction Stop | Out-Null}catch{Stop-WithMessage '管理画面起動処理を開始できませんでした。Windows PowerShellが利用可能か確認してください。'} }
 
     Show-Step 'Paperを起動しています。plugin enable、HTTP bind、管理画面準備の完了を待ってください。'
     Write-Host 'Paperを起動します。管理画面は準備完了後に自動で開きます。' -ForegroundColor Green
     Write-Host '安全に終了するには、このウィンドウで Y キーを押してください。Paperコマンド入力は不要です。' -ForegroundColor Yellow
-    $paperInfo=[Diagnostics.ProcessStartInfo]::new();$paperInfo.FileName=$javaExe;$paperInfo.WorkingDirectory=$runtime;$paperInfo.UseShellExecute=$false;$paperInfo.Arguments='-Xms1G -Xmx2G -Dpaper.disableStartupVersionCheck=true -jar "'+$paperJar+'" --nogui'
+    $paperInfo=[Diagnostics.ProcessStartInfo]::new();$paperInfo.FileName=$javaExe;$paperInfo.WorkingDirectory=$runtime;$paperInfo.UseShellExecute=$false;$paperInfo.RedirectStandardInput=$true;$paperInfo.Arguments='-Xms1G -Xmx2G -Dpaper.disableStartupVersionCheck=true -jar "'+$paperJar+'" --nogui'
     $paperProcess=[Diagnostics.Process]::Start($paperInfo)
     if($null -eq $paperProcess){Stop-WithMessage 'Paperプロセスを開始できませんでした。'}
+    $paperProcess.StandardInput.Close()
     while(-not $paperProcess.HasExited){$preflight=$env:ORUSHIO_PREFLIGHT_AUTOSTOP -eq '1';$requestStop=$preflight -and (Test-Path -LiteralPath $shutdownHandoff);if(-not $preflight -and [Console]::KeyAvailable){$key=[Console]::ReadKey($true);$requestStop=$key.KeyChar.ToString().ToUpperInvariant() -eq 'Y' -or (($key.Modifiers -band [ConsoleModifiers]::Control) -and $key.Key -eq [ConsoleKey]::C)}if($requestStop){Write-Host '';Write-Host '[STOP] shutdown要求';if(Request-SafeShutdown){Write-Host 'OPBPへ安全停止を要求しました。保存完了までお待ちください。' -ForegroundColor Yellow;break}Write-Host '安全停止を要求できませんでした。サーバーはまだ稼働しています。しばらく待ってからYキーを押してください。' -ForegroundColor Red;if($preflight){Stop-WithMessage 'Preflightで安全停止要求に失敗しました。'} }Start-Sleep -Milliseconds 100}
     if(-not $paperProcess.WaitForExit(120000)){Write-Host 'サーバーの終了に時間がかかっています。データ保護のため強制終了せず待機します。ウィンドウを閉じないでください。' -ForegroundColor Yellow;$paperProcess.WaitForExit()};$paperExit=$paperProcess.ExitCode;Write-Host "[STOP] Paper終了コード=$paperExit"
     if ($paperExit -ne 0) { Stop-WithMessage "Paperが異常終了しました（終了コード: $paperExit）。.runtime\paper\logs\latest.logを確認してください。" }
