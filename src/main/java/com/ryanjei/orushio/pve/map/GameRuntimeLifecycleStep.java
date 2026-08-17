@@ -1,0 +1,16 @@
+package com.ryanjei.orushio.pve.map;
+import com.ryanjei.orushio.pve.application.*;import com.ryanjei.orushio.pve.domain.*;import com.ryanjei.orushio.pve.logging.AuditSink;import java.util.*;
+public final class GameRuntimeLifecycleStep implements GameLifecycleStep,RuntimeMarkerResolver{
+ private final MapProfileRepository profiles;private final TemporaryWorldManager worlds;private final GameRuntimeGateway gateway;private final AuditSink audit;private Runtime runtime;private GameRuntimeView view=GameRuntimeView.idle();
+ public GameRuntimeLifecycleStep(MapProfileRepository profiles,TemporaryWorldManager worlds,GameRuntimeGateway gateway,AuditSink audit){this.profiles=profiles;this.worlds=worlds;this.gateway=gateway;this.audit=audit;}
+ public synchronized void prepare(GameSession session){MapProfile profile=profiles.find(new MapProfileId(session.mapId())).orElseThrow(()->new MapIoException("RUNTIME_MAP","使用マップが見つかりません。"));view=new GameRuntimeView("ゲームワールドを準備中","読み込み中","未実行","");try{RuntimeMap map=RuntimeMap.resolve(profile);TemporaryWorldManager.OwnedWorld world=worlds.create(profile,"run",session.sessionId().toString());runtime=new Runtime(session.sessionId(),world,map);view=new GameRuntimeView("準備済み","準備済み","参加者を転送中","");gateway.prepare(world,map,session.participants());view=new GameRuntimeView("準備済み","準備済み","転送完了","");audit("RUNTIME_WORLD_CREATED");}catch(RuntimeException failure){view=new GameRuntimeView("準備失敗","読み込み失敗","未完了","ゲームワールドの準備に失敗しました。");audit("RUNTIME_WORLD_PREPARE_FAILED");throw failure;}}
+ public synchronized void rollbackPreparation(GameSession session){cleanupInternal(session);}
+ public synchronized void cleanup(GameSession session){cleanupInternal(session);}
+ private void cleanupInternal(GameSession session){if(runtime==null){view=GameRuntimeView.idle();return;}if(!runtime.sessionId.equals(session.sessionId()))throw new MapIoException("RUNTIME_OWNERSHIP","ゲームセッションの所有情報が一致しません。");try{gateway.returnParticipantsAndUnload(runtime.world,session.participants());worlds.delete(runtime.world);runtime=null;view=GameRuntimeView.idle();audit("RUNTIME_WORLD_CLEANED");}catch(RuntimeException failure){view=new GameRuntimeView("復旧が必要","保持中","ロビー復帰または回収に失敗","ゲームワールドを安全に回収できません。");audit("RUNTIME_WORLD_CLEANUP_FAILED");throw failure;}}
+ public synchronized void participantConnected(GameSession session,UUID playerId){if(session.state()==GameState.ACTIVE&&runtime!=null&&runtime.sessionId.equals(session.sessionId())){gateway.reconnectParticipant(runtime.world,runtime.map,playerId);audit("PARTICIPANT_RUNTIME_RECONNECTED");}}
+ public synchronized void pendingCleanupConnected(GameSession session,UUID playerId){gateway.returnPendingToLobby(playerId);}
+ public synchronized List<SpawnMarker> resolveEnabledMarkers(String areaId){if(runtime==null)return List.of();return runtime.map.enabledMarkers(areaId);}
+ public synchronized GameRuntimeView runtimeView(){return view;}
+ private void audit(String code){audit.record(UUID.randomUUID().toString(),"SYSTEM",code,"GAME_RUNTIME");}
+ private record Runtime(UUID sessionId,TemporaryWorldManager.OwnedWorld world,RuntimeMap map){}
+}

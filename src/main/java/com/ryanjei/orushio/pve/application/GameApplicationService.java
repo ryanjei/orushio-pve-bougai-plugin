@@ -23,4 +23,5 @@ public interface GameApplicationService {
     default void playerConnected(UUID playerId,String name){}
     default void playerDisconnected(UUID playerId){}
     default int participantLimit(){return ParticipantPolicy.standard().maxParticipants();}
+    default GameRuntimeView runtimeView(){return GameRuntimeView.idle();}
 }

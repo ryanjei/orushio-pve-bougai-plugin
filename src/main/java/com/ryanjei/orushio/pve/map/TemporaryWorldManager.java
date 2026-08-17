@@ -6,7 +6,7 @@ import java.nio.file.*;
 import java.util.*;
 
 public final class TemporaryWorldManager {
-    public record OwnedWorld(String worldName, MapProfileId mapId, String purpose, String ownershipId, Path directory) {}
+    public record OwnedWorld(String worldName, MapProfileId mapId, String purpose, String ownershipId, String sessionId, Path directory) {public OwnedWorld(String worldName,MapProfileId mapId,String purpose,String ownershipId,Path directory){this(worldName,mapId,purpose,ownershipId,"",directory);}}
     private static final String MARKER = ".orushio-world-owner";
     private final Path mapsRoot, worldContainer;
     private boolean startupRecoveryPrepared;
@@ -15,7 +15,8 @@ public final class TemporaryWorldManager {
     private OwnedWorld recoveryTarget;
     public TemporaryWorldManager(Path mapsRoot, Path worldContainer) { this.mapsRoot=mapsRoot.toAbsolutePath().normalize(); this.worldContainer=worldContainer.toAbsolutePath().normalize(); }
 
-    public synchronized OwnedWorld create(MapProfile profile, String purpose) {
+    public synchronized OwnedWorld create(MapProfile profile, String purpose) {return create(profile,purpose,"");}
+    public synchronized OwnedWorld create(MapProfile profile, String purpose,String sessionId) {
         if (startupRecoveryFailure != null) throw new MapIoException("WORLD_RECOVERY", "起動時の一時ワールド回収に失敗したため新規作成できません。", startupRecoveryFailure);
         if (!startupRecoveryComplete) throw new MapIoException("WORLD_RECOVERY_IN_PROGRESS", "起動時の一時ワールド回収中です。しばらく待ってください。");
         if(!Set.of("run","setup").contains(purpose)) throw new IllegalArgumentException("一時ワールド用途が不正です。");
@@ -25,8 +26,8 @@ public final class TemporaryWorldManager {
         try {
             if(!Files.isRegularFile(source.resolve("level.dat"))) throw new MapIoException("TEMPLATE_INVALID","原本ワールドが不正です。");
             SafeFiles.copyTree(source,target);
-            Files.writeString(target.resolve(MARKER),"mapId="+profile.mapId().value()+"\npurpose="+purpose+"\nownershipId="+ownership+"\n",StandardOpenOption.CREATE_NEW);
-            return new OwnedWorld(name,profile.mapId(),purpose,ownership,target);
+            Files.writeString(target.resolve(MARKER),"mapId="+profile.mapId().value()+"\npurpose="+purpose+"\nownershipId="+ownership+"\nsessionId="+(sessionId==null?"":sessionId)+"\n",StandardOpenOption.CREATE_NEW);
+            return new OwnedWorld(name,profile.mapId(),purpose,ownership,sessionId==null?"":sessionId,target);
         } catch(Exception e) {
             try { if(Files.exists(target)) SafeFiles.deleteTree(target); } catch(IOException ignored) {}
             if(e instanceof MapIoException mapError) throw mapError;
@@ -38,7 +39,7 @@ public final class TemporaryWorldManager {
         Path target=worldContainer.resolve(world.worldName()).normalize();
         if(!target.equals(world.directory().toAbsolutePath().normalize())||!target.getParent().equals(worldContainer)) throw new MapIoException("WORLD_OWNERSHIP","削除対象が不正です。");
         OwnedWorld actual=readOwned(target).orElseThrow(()->new MapIoException("WORLD_OWNERSHIP","所有情報を確認できません。"));
-        if(!actual.mapId().equals(world.mapId())||!actual.purpose().equals(world.purpose())||!actual.ownershipId().equals(world.ownershipId())) throw new MapIoException("WORLD_OWNERSHIP","所有情報が一致しません。");
+        if(!actual.mapId().equals(world.mapId())||!actual.purpose().equals(world.purpose())||!actual.ownershipId().equals(world.ownershipId())||!actual.sessionId().equals(world.sessionId())) throw new MapIoException("WORLD_OWNERSHIP","所有情報が一致しません。");
         try { SafeFiles.deleteTree(target); } catch(IOException e) { throw new MapIoException("WORLD_DELETE","一時ワールドを削除できません。",e); }
     }
 
@@ -90,7 +91,7 @@ public final class TemporaryWorldManager {
             Map<String,String> values=new HashMap<>(); for(String line:Files.readAllLines(marker)){int i=line.indexOf('=');if(i>0)values.put(line.substring(0,i),line.substring(i+1));}
             String purpose=values.get("purpose"),ownership=values.get("ownershipId"),mapId=values.get("mapId");
             if(!Set.of("run","setup").contains(purpose)||ownership==null||mapId==null) return Optional.empty();
-            return Optional.of(new OwnedWorld(dir.getFileName().toString(),new MapProfileId(mapId),purpose,ownership,dir));
+            return Optional.of(new OwnedWorld(dir.getFileName().toString(),new MapProfileId(mapId),purpose,ownership,values.getOrDefault("sessionId",""),dir));
         } catch(Exception e) { return Optional.empty(); }
     }
 }

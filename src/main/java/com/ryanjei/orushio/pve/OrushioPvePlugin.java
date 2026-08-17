@@ -51,9 +51,6 @@ public final class OrushioPvePlugin extends JavaPlugin {
 
             Path mapsRoot = data.resolve("maps");
             MapProfileRepository mapProfiles = new YamlMapProfileRepository(mapsRoot);
-            DefaultGameApplicationService games = createGames(
-                    data, startup, serverAdministration, mapProfiles, mapsRoot, audit);
-
             TemporaryWorldManager temporaryWorlds = new TemporaryWorldManager(
                     mapsRoot, getServer().getWorldContainer().toPath());
             temporaryWorlds.prepareStartupRecovery();
@@ -64,10 +61,14 @@ public final class OrushioPvePlugin extends JavaPlugin {
                     });
 
             PaperMapWorldGateway mapWorlds = new PaperMapWorldGateway(this, gameThread);
+            GameRuntimeLifecycleStep runtimeStep = new GameRuntimeLifecycleStep(
+                    mapProfiles, temporaryWorlds, new PaperGameRuntimeGateway(gameThread), audit);
+            DefaultGameApplicationService games = createGames(
+                    data, startup, serverAdministration, mapProfiles, mapsRoot, audit, List.of(runtimeStep));
             MapAdministrationService maps = new DefaultMapAdministrationService(
                     mapsRoot, mapProfiles,
                     new SafeWorldZipImporter(mapsRoot, SafeWorldZipImporter.Limits.defaults()),
-                    temporaryWorlds, mapWorlds, games, new MapSelectionService(new Random()));
+                    temporaryWorlds, mapWorlds, games, new MapSelectionService(new Random()), audit);
             getServer().getPluginManager().registerEvents(new MapSetupListener(maps, mapWorlds), this);
             if (!startup.diagnosticMode()) {
                 participantConnections = new ParticipantConnectionDispatcher(games, failure ->
@@ -105,22 +106,38 @@ public final class OrushioPvePlugin extends JavaPlugin {
 
     private DefaultGameApplicationService createGames(
             Path data, StartupState startup, ServerAdministrationService serverAdministration,
-            MapProfileRepository maps, Path mapsRoot, AuditLog audit) {
+            MapProfileRepository maps, Path mapsRoot, AuditLog audit,List<GameLifecycleStep> lifecycleSteps) {
         GameSession initial = startup.session().orElseGet(GameSession::idle);
         ActiveSessionRepository repository;
         if (startup.diagnosticMode()) {
+            GameSession diagnosticSession = initial;
             repository = new ActiveSessionRepository() {
-                @Override public Optional<GameSession> load() { return Optional.of(initial); }
+                @Override public Optional<GameSession> load() { return Optional.of(diagnosticSession); }
                 @Override public void save(GameSession ignored) {
                     throw new RepositoryException("診断モードではゲーム状態を保存できません。");
                 }
             };
         } else {
             repository = new YamlActiveSessionRepository(data.resolve("sessions/active.yml"));
+            GameSession recovered = recoverySessionAfterRestart(initial);
+            if (recovered != initial) {
+                repository.save(recovered);
+                initial = recovered;
+                audit.record(UUID.randomUUID().toString(), "SYSTEM", "GAME_RESTART_RECOVERY_REQUIRED", "PLUGIN_ENABLE");
+            }
         }
         return new DefaultGameApplicationService(
                 repository, initial, serverAdministration::onlinePlayers, maps,
-                new YamlGameLaunchSettingsRepository(mapsRoot), List.of(), audit);
+                new YamlGameLaunchSettingsRepository(mapsRoot), lifecycleSteps, audit);
+    }
+
+    private static GameSession recoverySessionAfterRestart(GameSession session) {
+        return switch (session.state()) {
+            case PREPARING, ACTIVE -> session.transitionedTo(com.ryanjei.orushio.pve.domain.GameState.ABORTING)
+                    .transitionedTo(com.ryanjei.orushio.pve.domain.GameState.RECOVERING);
+            case ABORTING -> session.transitionedTo(com.ryanjei.orushio.pve.domain.GameState.RECOVERING);
+            default -> session;
+        };
     }
 
     private void expireGameSafely(DefaultGameApplicationService games) {

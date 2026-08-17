@@ -35,13 +35,13 @@ class GameLifecycleApplicationServiceTest {
         assertThrows(DomainException.class, () -> service.addParticipant(online.get(4).uuid()));
     }
 
-    @Test void startViewは有効マップと接続中参加者を検証する() {
+    @Test void startViewは有効マップを検証しoffline参加者も保持して開始できる() {
         var service=service();
         assertFalse(service.startView("map-a").ready());
         service.addParticipant(alice);
         assertTrue(service.startView("map-a").ready());
         service.playerDisconnected(alice); online.clear();
-        assertFalse(service.startView("map-a").ready());
+        assertTrue(service.startView("map-a").ready());
     }
 
     @Test void 準備中を明示的に経由して開始時人数とサーバー時刻を固定する() {
@@ -94,6 +94,8 @@ class GameLifecycleApplicationServiceTest {
 
     @Test void ACTIVE中のquit即joinも参加情報と開始時人数を維持する(){var service=service();service.addParticipant(alice);service.prepareGame("IDLE","map-a");service.activateGame(service.current().sessionId().toString(),Instant.now());try(var dispatcher=new ParticipantConnectionDispatcher(service,failure->fail(failure))){dispatcher.disconnected(alice);dispatcher.connected(alice,"Alice2");}assertEquals(GameState.ACTIVE,service.current().state());assertEquals(1,service.current().participantCountAtStart());assertEquals(1,service.current().participants().size());assertTrue(service.current().participants().getFirst().connected());assertEquals("Alice2",service.current().participants().getFirst().lastKnownName());}
 
+    @Test void participant再接続だけRuntimeへ戻しpendingCleanupはロビー復帰後に消化する(){ConnectionStep step=new ConnectionStep();var service=service(List.of(step),ParticipantPolicy.standard());service.addParticipant(alice);service.prepareGame("IDLE","map-a");service.activateGame(service.current().sessionId().toString(),Instant.now());service.playerDisconnected(alice);service.playerConnected(alice,"Alice");assertEquals(List.of(alice),step.runtimeConnections);service.playerDisconnected(alice);service.abortGame(service.current().sessionId().toString(),"ADMIN");assertTrue(service.current().pendingCleanup().contains(alice));service.playerConnected(alice,"Alice");assertEquals(List.of(alice),step.lobbyConnections);assertFalse(service.current().pendingCleanup().contains(alice));UUID unrelated=UUID.randomUUID();service.playerConnected(unrelated,"Other");assertEquals(1,step.runtimeConnections.size());}
+
     private DefaultGameApplicationService service(){return service(List.of(),ParticipantPolicy.standard());}
     private DefaultGameApplicationService service(List<GameLifecycleStep> steps,ParticipantPolicy policy){return new DefaultGameApplicationService(sessions,GameSession.idle(),()->List.copyOf(online),maps,settings,steps,new AuditSink(){public void record(String trace,String category,String code,String operation){auditCodes.add(code);}public boolean healthy(){return true;}},policy);}
     private static MapProfile completeMap(){Map<String,List<BlockPoint>> p=new HashMap<>();for(String k:MapProfile.REQUIRED_SINGLE_POINTS)p.put(k,List.of(point()));p.put("normalCoreCandidates",List.of(point(),point(),point()));p.put("shopPoints",List.of(point()));Map<String,List<Cuboid>> a=new HashMap<>();for(String k:MapProfile.REQUIRED_AREA_COUNTS.keySet())a.put(k,List.of(new Cuboid(0,0,0,1,1,1)));return new MapProfile(new MapProfileId("map-a"),"Map A",true,"original",p,a,Instant.now());}
@@ -101,4 +103,5 @@ class GameLifecycleApplicationServiceTest {
     private static final class MemoryActive implements ActiveSessionRepository{GameSession value;public Optional<GameSession> load(){return Optional.ofNullable(value);}public void save(GameSession value){this.value=value;}}
     private static final class MemorySettings implements GameLaunchSettingsRepository{GameLaunchSettings value=GameLaunchSettings.defaults();public GameLaunchSettings load(String ignored){return value;}public void save(String ignored,GameLaunchSettings value){this.value=value;}}
     private static final class RecordingStep implements GameLifecycleStep{boolean failPrepare,failCleanup;int resources;RecordingStep(boolean failPrepare,boolean failCleanup){this.failPrepare=failPrepare;this.failCleanup=failCleanup;}public void prepare(GameSession ignored){resources++;if(failPrepare)throw new RuntimeException("prepare");}public void rollbackPreparation(GameSession ignored){if(failCleanup)throw new RuntimeException("rollback");resources--;}public void cleanup(GameSession ignored){if(failCleanup)throw new RuntimeException("cleanup");resources=0;}}
+    private static final class ConnectionStep implements GameLifecycleStep{final List<UUID>runtimeConnections=new ArrayList<>(),lobbyConnections=new ArrayList<>();public void prepare(GameSession ignored){}public void rollbackPreparation(GameSession ignored){}public void cleanup(GameSession ignored){}public void participantConnected(GameSession ignored,UUID id){runtimeConnections.add(id);}public void pendingCleanupConnected(GameSession ignored,UUID id){lobbyConnections.add(id);}}
 }
