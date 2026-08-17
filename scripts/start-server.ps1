@@ -7,6 +7,7 @@ $paperJar = Join-Path $runtime 'paper.jar'
 $plugins = Join-Path $runtime 'plugins'
 $pluginJar = Join-Path $plugins 'orushio-pve-bougai-plugin.jar'
 $handoff = Join-Path $plugins 'OrushioPveBougai\admin-bootstrap.url'
+$shutdownHandoff = Join-Path $plugins 'OrushioPveBougai\launcher-shutdown.token'
 $paperUrl = 'https://fill-data.papermc.io/v1/objects/5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba/paper-1.21.11-132.jar'
 $paperSha256 = '5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba'
 $launcherLog = Join-Path $runtime 'logs\launcher.log'
@@ -28,6 +29,17 @@ function Find-Java21 {
 function Test-Port([int]$port) {
     $client = [Net.Sockets.TcpClient]::new()
     try { $task=$client.ConnectAsync('127.0.0.1',$port); return $task.Wait(300) -and $client.Connected } catch { return $false } finally { $client.Dispose() }
+}
+function Request-SafeShutdown {
+    if (-not (Test-Path -LiteralPath $shutdownHandoff)) { return $false }
+    $shutdownToken=(Get-Content -LiteralPath $shutdownHandoff -Raw).Trim()
+    if ([string]::IsNullOrWhiteSpace($shutdownToken)) { return $false }
+    try {
+        $response=Invoke-WebRequest -UseBasicParsing -Method Post -Uri 'http://127.0.0.1:8765/launcher/shutdown' -Headers @{'X-OPBP-Shutdown-Token'=$shutdownToken} -TimeoutSec 10
+        if ($response.StatusCode -ne 202) { return $false }
+        Remove-Item -LiteralPath $shutdownHandoff -Force -ErrorAction SilentlyContinue
+        return $true
+    } catch { return $false }
 }
 
 try {
@@ -78,6 +90,7 @@ try {
     Move-Item -LiteralPath $stagedPlugin -Destination $pluginJar -Force
     if (-not (Test-Path -LiteralPath $pluginJar)) { Stop-WithMessage 'plugin配置に失敗しました。runtimeの書込み権限を確認してください。' }
     Remove-Item -LiteralPath $handoff -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $shutdownHandoff -Force -ErrorAction SilentlyContinue
     if ($PrepareOnly) { Write-Host '起動準備確認が完了しました。'; Stop-Transcript | Out-Null; exit 0 }
 
     if (-not $NoBrowser) { Show-Step '認証済み管理画面の自動表示を準備しています。';$opener=Join-Path $PSScriptRoot 'open-admin.ps1';if(-not(Test-Path -LiteralPath $opener)){Stop-WithMessage '管理画面起動処理 scripts\open-admin.ps1 が見つかりません。Repositoryのファイル一式を確認してください。'};$arguments='-NoProfile -ExecutionPolicy Bypass -File "'+$opener+'" -Handoff "'+$handoff+'"';try{Start-Process powershell.exe -WindowStyle Hidden -ArgumentList $arguments -ErrorAction Stop | Out-Null}catch{Stop-WithMessage '管理画面起動処理を開始できませんでした。Windows PowerShellが利用可能か確認してください。'} }
@@ -85,11 +98,11 @@ try {
     Show-Step 'Paperを起動しています。plugin enable、HTTP bind、管理画面準備の完了を待ってください。'
     Write-Host 'Paperを起動します。管理画面は準備完了後に自動で開きます。' -ForegroundColor Green
     Write-Host '安全に終了するには、このウィンドウで Y キーを押してください。Paperコマンド入力は不要です。' -ForegroundColor Yellow
-    $paperInfo=[Diagnostics.ProcessStartInfo]::new();$paperInfo.FileName=$javaExe;$paperInfo.WorkingDirectory=$runtime;$paperInfo.UseShellExecute=$false;$paperInfo.RedirectStandardInput=$true;$paperInfo.Arguments='-Xms1G -Xmx2G -Dpaper.disableStartupVersionCheck=true -jar "'+$paperJar+'" --nogui'
+    $paperInfo=[Diagnostics.ProcessStartInfo]::new();$paperInfo.FileName=$javaExe;$paperInfo.WorkingDirectory=$runtime;$paperInfo.UseShellExecute=$false;$paperInfo.Arguments='-Xms1G -Xmx2G -Dpaper.disableStartupVersionCheck=true -jar "'+$paperJar+'" --nogui'
     $paperProcess=[Diagnostics.Process]::Start($paperInfo)
     if($null -eq $paperProcess){Stop-WithMessage 'Paperプロセスを開始できませんでした。'}
-    while(-not $paperProcess.HasExited){$preflight=$env:ORUSHIO_PREFLIGHT_AUTOSTOP -eq '1';$requestStop=$preflight -and (Test-Path -LiteralPath $handoff);if(-not $preflight -and [Console]::KeyAvailable){$key=[Console]::ReadKey($true);$requestStop=$key.KeyChar.ToString().ToUpperInvariant() -eq 'Y' -or (($key.Modifiers -band [ConsoleModifiers]::Control) -and $key.Key -eq [ConsoleKey]::C)}if($requestStop){Write-Host '';Write-Host '[STOP] stop要求';Write-Host 'Paperへ安全停止を要求しています。保存完了までお待ちください。' -ForegroundColor Yellow;$stopBytes=[byte[]](0x73,0x74,0x6f,0x70,0x0a);$paperProcess.StandardInput.BaseStream.Write($stopBytes,0,$stopBytes.Length);$paperProcess.StandardInput.BaseStream.Flush();break}Start-Sleep -Milliseconds 100}
-    $paperProcess.WaitForExit();$paperExit=$paperProcess.ExitCode;Write-Host "[STOP] Paper終了コード=$paperExit"
+    while(-not $paperProcess.HasExited){$preflight=$env:ORUSHIO_PREFLIGHT_AUTOSTOP -eq '1';$requestStop=$preflight -and (Test-Path -LiteralPath $shutdownHandoff);if(-not $preflight -and [Console]::KeyAvailable){$key=[Console]::ReadKey($true);$requestStop=$key.KeyChar.ToString().ToUpperInvariant() -eq 'Y' -or (($key.Modifiers -band [ConsoleModifiers]::Control) -and $key.Key -eq [ConsoleKey]::C)}if($requestStop){Write-Host '';Write-Host '[STOP] shutdown要求';if(Request-SafeShutdown){Write-Host 'OPBPへ安全停止を要求しました。保存完了までお待ちください。' -ForegroundColor Yellow;break}Write-Host '安全停止を要求できませんでした。サーバーはまだ稼働しています。しばらく待ってからYキーを押してください。' -ForegroundColor Red;if($preflight){Stop-WithMessage 'Preflightで安全停止要求に失敗しました。'} }Start-Sleep -Milliseconds 100}
+    if(-not $paperProcess.WaitForExit(120000)){Write-Host 'サーバーの終了に時間がかかっています。データ保護のため強制終了せず待機します。ウィンドウを閉じないでください。' -ForegroundColor Yellow;$paperProcess.WaitForExit()};$paperExit=$paperProcess.ExitCode;Write-Host "[STOP] Paper終了コード=$paperExit"
     if ($paperExit -ne 0) { Stop-WithMessage "Paperが異常終了しました（終了コード: $paperExit）。.runtime\paper\logs\latest.logを確認してください。" }
     Write-Host '[STOP] 正常終了 / launcher終了'
     Write-Host 'OPBPサーバーを安全に停止しました。' -ForegroundColor Green
