@@ -5,5 +5,5 @@ api-version: '1.21'
 description: 妨害PvE企画の管理基盤
 permissions:
   orushio.pve.admin:
-    description: Orushio PVE管理権限
+    description: OPBP管理権限
     default: op

@@ -13,7 +13,7 @@ class WindowsLauncherAssetsTest {
     @Test void repositoryTopLevelHasVisibleOneClickLauncherAndRuntimeIsIgnored() throws Exception {
         byte[] bytes=Files.readAllBytes(Path.of("START_SERVER.bat"));
         String bat=new String(bytes,StandardCharsets.UTF_8),ignore=Files.readString(Path.of(".gitignore")),attributes=Files.readString(Path.of(".gitattributes"));
-        assertTrue(bat.contains("Orushio PVE サーバーを起動しています"));
+        assertTrue(bat.contains("OPBP サーバーを起動しています"));
         assertTrue(bat.contains("scripts\\start-server.ps1"));
         assertTrue(bat.contains("if not exist \"%ORUSHIO_SCRIPT%\""));
         assertTrue(bat.contains("if not exist \"%ORUSHIO_POWERSHELL%\""));
@@ -27,7 +27,7 @@ class WindowsLauncherAssetsTest {
         Process process=new ProcessBuilder("cmd.exe","/d","/c",bat.toString()).redirectErrorStream(true).start();
         process.getOutputStream().write(System.lineSeparator().getBytes(StandardCharsets.UTF_8));process.getOutputStream().close();
         assertTrue(process.waitFor(10,TimeUnit.SECONDS));String output=new String(process.getInputStream().readAllBytes(),StandardCharsets.UTF_8);
-        assertNotEquals(0,process.exitValue());assertTrue(output.contains("Orushio PVE"));assertTrue(output.contains("start-server.ps1"));
+        assertNotEquals(0,process.exitValue());assertTrue(output.contains("OPBP"));assertTrue(output.contains("start-server.ps1"));
     }
 
     @Test void nonZeroPowerShellExitProducesReadableErrorAndPausePath() throws Exception {
@@ -48,5 +48,5 @@ class WindowsLauncherAssetsTest {
         String script=Files.readString(Path.of("scripts/start-server.ps1")),opener=Files.readString(Path.of("scripts/open-admin.ps1"));
         assertTrue(script.contains("paper-1.21.11-132.jar"));assertTrue(script.contains("5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba"));assertTrue(script.contains("Security.Cryptography.SHA256"));assertTrue(opener.contains("http://127.0.0.1:8765/auth/bootstrap?token=*"));assertTrue(opener.indexOf("Remove-Item -LiteralPath $Handoff")<opener.indexOf("Start-Process $url"));assertTrue(opener.contains("管理画面の準備が120秒以内"));assertTrue(opener.contains("既定ブラウザの設定"));assertFalse(script.contains("secrets.yml"));
     }
-    @Test void launcherProvidesSafeStopAndSeparatesNormalAndAbnormalExitWithoutLoggingSecrets()throws Exception{String script=Files.readString(Path.of("scripts/start-server.ps1"));assertTrue(script.contains("Y キーを押してください"));assertTrue(script.contains("StandardInput.WriteLine('stop')"));assertTrue(script.contains("$paperProcess.WaitForExit()"));assertTrue(script.contains("Paper終了コード=$paperExit"));assertTrue(script.contains("Orushio PVEサーバーを安全に停止しました"));assertTrue(script.contains("Paperが異常終了しました"));assertTrue(script.contains("CtrlPressed")||script.contains("ConsoleModifiers]::Control"));assertFalse(script.contains("bootstrap?token="));assertFalse(script.contains("installationSecret"));}
+    @Test void launcherProvidesBomFreeSafeStopAndSeparatesNormalAndAbnormalExitWithoutLoggingSecrets()throws Exception{String script=Files.readString(Path.of("scripts/start-server.ps1"));assertTrue(script.contains("Y キーを押してください"));assertTrue(script.contains("[byte[]](0x73,0x74,0x6f,0x70,0x0a)"));assertTrue(script.contains("StandardInput.BaseStream.Write($stopBytes,0,$stopBytes.Length)"));assertTrue(script.contains("StandardInput.BaseStream.Flush()"));assertFalse(script.contains("StandardInput.WriteLine"));assertFalse(script.contains("\uFEFFstop"));assertTrue(script.contains("$paperProcess.WaitForExit()"));assertTrue(script.contains("Paper終了コード=$paperExit"));assertTrue(script.contains("OPBPサーバーを安全に停止しました"));assertTrue(script.contains("Paperが異常終了しました"));assertTrue(script.contains("CtrlPressed")||script.contains("ConsoleModifiers]::Control"));assertFalse(script.contains("bootstrap?token="));assertFalse(script.contains("installationSecret"));}
 }

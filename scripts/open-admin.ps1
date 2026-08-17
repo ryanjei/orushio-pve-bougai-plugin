@@ -1,7 +1,7 @@
 ﻿param([Parameter(Mandatory=$true)][string]$Handoff)
 $logPath=Join-Path (Split-Path (Split-Path (Split-Path $Handoff -Parent) -Parent) -Parent) 'logs\launcher.log'
 function Write-LauncherLog([string]$message){Add-Content -LiteralPath $logPath -Value "[$([DateTime]::Now.ToString('s'))] $message" -Encoding utf8}
-function Show-AdminError([string]$message){Write-LauncherLog $message;try{Add-Type -AssemblyName PresentationFramework;[System.Windows.MessageBox]::Show($message,'Orushio PVE 管理画面',[System.Windows.MessageBoxButton]::OK,[System.Windows.MessageBoxImage]::Error)|Out-Null}catch{}}
+function Show-AdminError([string]$message){Write-LauncherLog $message;try{Add-Type -AssemblyName PresentationFramework;[System.Windows.MessageBox]::Show($message,'OPBP 管理画面',[System.Windows.MessageBoxButton]::OK,[System.Windows.MessageBoxImage]::Error)|Out-Null}catch{}}
 $deadline=[DateTime]::UtcNow.AddSeconds(120)
 while([DateTime]::UtcNow -lt $deadline){
     if(Test-Path -LiteralPath $Handoff){

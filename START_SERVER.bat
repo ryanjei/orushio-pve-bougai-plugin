@@ -1,9 +1,9 @@
 @echo off
 chcp 65001 >nul
 setlocal
-title Orushio PVE サーバー起動
+title OPBP サーバー起動
 echo ==================================================
-echo Orushio PVE サーバーを起動しています...
+echo OPBP サーバーを起動しています...
 echo ==================================================
 echo [起動準備] 起動ファイルを確認しています。
 cd /d "%~dp0"
@@ -36,7 +36,7 @@ if not "%ORUSHIO_EXIT%"=="0" (
 )
 
 echo.
-echo Orushio PVEサーバーの処理が正常に完了しました。
+echo OPBPサーバーの処理が正常に完了しました。
 echo 何かキーを押すとこのウィンドウを閉じます。
 pause >nul
 endlocal

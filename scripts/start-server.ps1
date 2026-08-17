@@ -33,7 +33,7 @@ function Test-Port([int]$port) {
 try {
     New-Item -ItemType Directory -Path (Split-Path $launcherLog -Parent) -Force | Out-Null
     Start-Transcript -LiteralPath $launcherLog -Append | Out-Null
-    Write-Host '=== Orushio PVE サーバー起動 ===' -ForegroundColor Cyan
+    Write-Host '=== OPBP サーバー起動 ===' -ForegroundColor Cyan
     Show-Step 'Java 21を確認しています。'
     $javaExe = Find-Java21
     if (-not $javaExe) { Stop-WithMessage '64bit版Java 21を確認できません。Java 21をインストールし、Windowsを再起動してから再実行してください。' }
@@ -88,11 +88,11 @@ try {
     $paperInfo=[Diagnostics.ProcessStartInfo]::new();$paperInfo.FileName=$javaExe;$paperInfo.WorkingDirectory=$runtime;$paperInfo.UseShellExecute=$false;$paperInfo.RedirectStandardInput=$true;$paperInfo.Arguments='-Xms1G -Xmx2G -Dpaper.disableStartupVersionCheck=true -jar "'+$paperJar+'" --nogui'
     $paperProcess=[Diagnostics.Process]::Start($paperInfo)
     if($null -eq $paperProcess){Stop-WithMessage 'Paperプロセスを開始できませんでした。'}
-    while(-not $paperProcess.HasExited){$preflight=$env:ORUSHIO_PREFLIGHT_AUTOSTOP -eq '1';$requestStop=$preflight -and (Test-Path -LiteralPath $handoff);if(-not $preflight -and [Console]::KeyAvailable){$key=[Console]::ReadKey($true);$requestStop=$key.KeyChar.ToString().ToUpperInvariant() -eq 'Y' -or (($key.Modifiers -band [ConsoleModifiers]::Control) -and $key.Key -eq [ConsoleKey]::C)}if($requestStop){Write-Host '';Write-Host '[STOP] stop要求';Write-Host 'Paperへ安全停止を要求しています。保存完了までお待ちください。' -ForegroundColor Yellow;$paperProcess.StandardInput.WriteLine('stop');$paperProcess.StandardInput.Flush();break}Start-Sleep -Milliseconds 100}
+    while(-not $paperProcess.HasExited){$preflight=$env:ORUSHIO_PREFLIGHT_AUTOSTOP -eq '1';$requestStop=$preflight -and (Test-Path -LiteralPath $handoff);if(-not $preflight -and [Console]::KeyAvailable){$key=[Console]::ReadKey($true);$requestStop=$key.KeyChar.ToString().ToUpperInvariant() -eq 'Y' -or (($key.Modifiers -band [ConsoleModifiers]::Control) -and $key.Key -eq [ConsoleKey]::C)}if($requestStop){Write-Host '';Write-Host '[STOP] stop要求';Write-Host 'Paperへ安全停止を要求しています。保存完了までお待ちください。' -ForegroundColor Yellow;$stopBytes=[byte[]](0x73,0x74,0x6f,0x70,0x0a);$paperProcess.StandardInput.BaseStream.Write($stopBytes,0,$stopBytes.Length);$paperProcess.StandardInput.BaseStream.Flush();break}Start-Sleep -Milliseconds 100}
     $paperProcess.WaitForExit();$paperExit=$paperProcess.ExitCode;Write-Host "[STOP] Paper終了コード=$paperExit"
     if ($paperExit -ne 0) { Stop-WithMessage "Paperが異常終了しました（終了コード: $paperExit）。.runtime\paper\logs\latest.logを確認してください。" }
     Write-Host '[STOP] 正常終了 / launcher終了'
-    Write-Host 'Orushio PVEサーバーを安全に停止しました。' -ForegroundColor Green
+    Write-Host 'OPBPサーバーを安全に停止しました。' -ForegroundColor Green
     Stop-Transcript | Out-Null
     exit 0
 } catch {
