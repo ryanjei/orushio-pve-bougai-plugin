@@ -22,4 +22,5 @@ public interface GameApplicationService {
     default boolean expireIfNeeded(Instant now){return false;}
     default void playerConnected(UUID playerId,String name){}
     default void playerDisconnected(UUID playerId){}
+    default int participantLimit(){return ParticipantPolicy.standard().maxParticipants();}
 }

@@ -20,7 +20,7 @@
 <section id="game" hidden>
 <article class="panel"><div class="panel-title"><div><h3>ゲーム開始</h3><p id="lifecycle-state">状態を取得しています…</p></div><button id="lifecycle-refresh" class="secondary">更新</button></div>
 <label for="game-map">使用マップ</label><select id="game-map"></select>
-<h4>ゲーム参加者（1～4人）</h4><ul id="game-participants" class="list"><li>読み込んでいます…</li></ul>
+<h4 id="game-participant-heading">ゲーム参加者</h4><ul id="game-participants" class="list"><li>読み込んでいます…</li></ul>
 <h4>今回の設定</h4><div class="columns"><label>制限時間（分）<input id="game-time-limit" type="number" min="1" max="1440" placeholder="既定値 60"></label><label>攻略通常コア数<input id="game-required-cores" type="number" min="1" max="1000" placeholder="既定値 2"></label><label>敵人数倍率<input id="game-enemy-multiplier" type="number" min="0.01" max="100" step="0.01" placeholder="既定値 1.0"></label></div>
 <p>空欄はマップ別の上書きを解除し、既定値を使います。</p><div class="actions"><button id="game-save-settings" class="secondary">マップ別設定を保存</button><button id="game-prepare">内容を確認して準備開始</button><button id="game-activate">準備完了としてゲーム進行開始</button><button id="game-abort" class="danger">ゲームを中止</button></div>
 <div id="game-readiness"></div></article>

@@ -30,6 +30,7 @@ public final class OrushioPvePlugin extends JavaPlugin {
     private BootstrapHandoff bootstrapHandoff;
     private LauncherShutdownHandoff shutdownHandoff;
     private BukkitTask lifecycleTimer;
+    private ParticipantConnectionDispatcher participantConnections;
 
     @Override
     public void onEnable() {
@@ -69,7 +70,10 @@ public final class OrushioPvePlugin extends JavaPlugin {
                     temporaryWorlds, mapWorlds, games, new MapSelectionService(new Random()));
             getServer().getPluginManager().registerEvents(new MapSetupListener(maps, mapWorlds), this);
             if (!startup.diagnosticMode()) {
-                getServer().getPluginManager().registerEvents(new GameLifecycleListener(this, games), this);
+                participantConnections = new ParticipantConnectionDispatcher(games, failure ->
+                        getLogger().log(Level.SEVERE,
+                                "ゲーム参加者の接続状態を保存できませんでした。管理画面の診断情報を確認してください。"));
+                getServer().getPluginManager().registerEvents(new GameLifecycleListener(participantConnections), this);
                 lifecycleTimer = getServer().getScheduler().runTaskTimerAsynchronously(this,
                         () -> expireGameSafely(games), 20L, 20L);
             }
@@ -135,6 +139,8 @@ public final class OrushioPvePlugin extends JavaPlugin {
         List<String> warnings = new ArrayList<>(startup.warnings());
         if (!audit.healthy()) warnings.add("監査ログへ書き込めません。");
         temporaryWorlds.startupRecoveryWarning().ifPresent(warnings::add);
+        boolean gameRecoveryRequired = games.current().state() == com.ryanjei.orushio.pve.domain.GameState.RECOVERING;
+        if (gameRecoveryRequired) warnings.add("ゲーム準備または清掃が完了していません。復旧清掃を再試行してください。");
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("paperRunning", true);
         result.put("pluginVersion", getPluginMeta().getVersion());
@@ -143,7 +149,7 @@ public final class OrushioPvePlugin extends JavaPlugin {
         result.put("configLoaded", configuration.configLoaded());
         result.put("sessionLoaded", startup.sessionLoaded());
         result.put("recoveryRequired",
-                startup.recoveryRequired() || temporaryWorlds.startupRecoveryWarning().isPresent());
+                startup.recoveryRequired() || temporaryWorlds.startupRecoveryWarning().isPresent() || gameRecoveryRequired);
         result.put("temporaryWorldRecoveryComplete", temporaryWorlds.startupRecoveryComplete());
         result.put("diagnosticMode", startup.diagnosticMode());
         result.put("gameState", games.current().state().name());
@@ -166,6 +172,10 @@ public final class OrushioPvePlugin extends JavaPlugin {
         if (lifecycleTimer != null) {
             lifecycleTimer.cancel();
             lifecycleTimer = null;
+        }
+        if (participantConnections != null) {
+            participantConnections.close();
+            participantConnections = null;
         }
         if (bootstrapHandoff != null) {
             try { bootstrapHandoff.clear(); } catch (Exception ignored) { }

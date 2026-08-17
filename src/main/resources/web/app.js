@@ -24,6 +24,7 @@ async function loadLifecycle() {
 }
 function renderLifecycle(value) {
   $('lifecycle-state').textContent = `${value.stateLabel} / 参加者 ${value.participantCount}人${value.remainingSeconds > 0 ? ` / 残り ${Math.ceil(value.remainingSeconds / 60)}分` : ''}`;
+  $('game-participant-heading').textContent = `ゲーム参加者（1～${value.participantLimit}人）`;
   const selected = new Set(value.participants.map(player => player.uuid));
   const participantRows = value.participants.map(player => `<li><span>${escapeHtml(player.name)}<small>参加者に選択済み / ${player.connected ? 'オンライン' : 'オフライン（参加登録は維持）'}</small></span><button data-game-participant="${escapeHtml(player.uuid)}" data-selected="true" class="danger">参加から外す</button></li>`);
   const candidateRows = onlinePlayers.filter(player => !selected.has(player.uuid)).map(player => `<li><span>${escapeHtml(player.name)}<small>オンライン</small></span><button data-game-participant="${escapeHtml(player.uuid)}" data-selected="false">参加者に追加</button></li>`);
@@ -37,7 +38,7 @@ function renderLifecycle(value) {
   } else $('game-readiness').textContent = '有効でセットアップ済みのマップを選択してください。';
   const editable = value.state === 'IDLE' || value.state === 'RECRUITING';
   $('game-save-settings').disabled = !editable || !start; $('game-prepare').disabled = !editable || !start?.ready;
-  $('game-activate').disabled = value.state !== 'PREPARING'; $('game-abort').disabled = !['PREPARING','ACTIVE'].includes(value.state);
+  $('game-activate').disabled = value.state !== 'PREPARING'; $('game-abort').disabled = !['PREPARING','ACTIVE','ABORTING','RECOVERING'].includes(value.state); $('game-abort').textContent = ['ABORTING','RECOVERING'].includes(value.state) ? '復旧清掃を再試行' : 'ゲームを中止';
   document.querySelectorAll('[data-game-participant]').forEach(button => button.disabled = !editable);
 }
 function optionalNumber(id) { const value = $(id).value.trim(); return value === '' ? null : Number(value); }
