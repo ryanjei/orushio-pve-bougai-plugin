@@ -11,15 +11,26 @@ import java.util.UUID;
 
 final class BukkitServerAccess implements PaperServerAccess {
     private final NamespacedKey grantedKey;
-    BukkitServerAccess() { grantedKey=new NamespacedKey("orushio","setup_administrator_granted"); }
-    @Override public List<OnlinePlayerView> onlinePlayers() { return Bukkit.getOnlinePlayers().stream().map(player -> new OnlinePlayerView(player.getUniqueId(), player.getName(), setupAdministrator(player))).toList(); }
+    private final SetupAdministratorOwnership ownership;
+    BukkitServerAccess(SetupAdministratorOwnership ownership) { this.ownership=ownership;grantedKey=new NamespacedKey("orushio","setup_administrator_granted"); }
+    @Override public List<OnlinePlayerView> onlinePlayers() { return Bukkit.getOnlinePlayers().stream().map(player -> new OnlinePlayerView(player.getUniqueId(), player.getName(), setupAdministrator(player),revocable(player))).toList(); }
     @Override public OnlinePlayerView grantSetupAdministrator(UUID playerId) {
         var player = Bukkit.getPlayer(playerId);
         if (player == null || !player.isOnline()) throw new com.ryanjei.orushio.pve.application.ServerAdministrationException("PLAYER_NOT_ONLINE", "指定されたプレイヤーは現在オンラインではありません。");
-        if (!setupAdministrator(player)) { player.getPersistentDataContainer().set(grantedKey,PersistentDataType.BYTE,(byte)1);player.setOp(true); }
-        return new OnlinePlayerView(player.getUniqueId(), player.getName(), setupAdministrator(player));
+        if (!setupAdministrator(player)) {
+            ownership.add(playerId);
+            try {
+                player.getPersistentDataContainer().set(grantedKey,PersistentDataType.BYTE,(byte)1);
+                player.setOp(true);
+            } catch (RuntimeException failure) {
+                player.getPersistentDataContainer().remove(grantedKey);
+                ownership.remove(playerId);
+                throw failure;
+            }
+        }
+        return new OnlinePlayerView(player.getUniqueId(), player.getName(), setupAdministrator(player),revocable(player));
     }
-    @Override public OnlinePlayerView revokeSetupAdministrator(UUID playerId) { var player=Bukkit.getPlayer(playerId);if(player==null||!player.isOnline())throw new com.ryanjei.orushio.pve.application.ServerAdministrationException("PLAYER_NOT_ONLINE","指定されたプレイヤーは現在オンラインではありません。");if(!player.getPersistentDataContainer().has(grantedKey,PersistentDataType.BYTE))throw new com.ryanjei.orushio.pve.application.ServerAdministrationException("ADMINISTRATOR_NOT_PLUGIN_GRANTED","この管理者権限はOrushioから付与されたものではないため解除できません。");player.getPersistentDataContainer().remove(grantedKey);player.setOp(false);return new OnlinePlayerView(player.getUniqueId(),player.getName(),setupAdministrator(player)); }
+    @Override public OnlinePlayerView revokeSetupAdministrator(UUID playerId) { var player=Bukkit.getPlayer(playerId);if(player==null||!player.isOnline())throw new com.ryanjei.orushio.pve.application.ServerAdministrationException("PLAYER_NOT_ONLINE","指定されたプレイヤーは現在オンラインではありません。");if(!revocable(player))throw new com.ryanjei.orushio.pve.application.ServerAdministrationException("ADMINISTRATOR_NOT_PLUGIN_GRANTED","この管理者権限はOrushioから付与されたものではないため解除できません。");player.setOp(false);player.getPersistentDataContainer().remove(grantedKey);ownership.remove(playerId);return new OnlinePlayerView(player.getUniqueId(),player.getName(),setupAdministrator(player),false); }
     @Override public boolean whitelistEnabled() { return Bukkit.hasWhitelist(); }
     @Override public void setWhitelistEnabled(boolean enabled) { Bukkit.setWhitelist(enabled); }
     @Override public List<WhitelistEntryView> whitelistedPlayers() { return Bukkit.getWhitelistedPlayers().stream().map(BukkitServerAccess::view).toList(); }
@@ -33,4 +44,5 @@ final class BukkitServerAccess implements PaperServerAccess {
     }
     private static WhitelistEntryView view(OfflinePlayer player) { return new WhitelistEntryView(player.getUniqueId(), player.getName() == null ? "名前不明" : player.getName()); }
     private static boolean setupAdministrator(org.bukkit.entity.Player player) { return player.isOp() && player.hasPermission("orushio.pve.admin"); }
+    private boolean revocable(org.bukkit.entity.Player player){return ownership.contains(player.getUniqueId())||player.getPersistentDataContainer().has(grantedKey,PersistentDataType.BYTE);}
 }

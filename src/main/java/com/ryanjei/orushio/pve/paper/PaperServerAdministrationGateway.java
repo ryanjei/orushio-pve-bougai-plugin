@@ -13,7 +13,7 @@ public final class PaperServerAdministrationGateway implements ServerAdministrat
     private final Duration timeout;
 
     public PaperServerAdministrationGateway(GameThreadExecutor executor) {
-        this(executor, new PaperPlayerIdentityResolver(executor), new BukkitServerAccess(), Duration.ofSeconds(3));
+        this(executor, new PaperPlayerIdentityResolver(executor), new BukkitServerAccess(new SetupAdministratorOwnership(org.bukkit.Bukkit.getPluginManager().getPlugin("OrushioPveBougai").getDataFolder().toPath(),org.bukkit.Bukkit.getWorldContainer().toPath())), Duration.ofSeconds(3));
     }
 
     PaperServerAdministrationGateway(GameThreadExecutor executor, PlayerIdentityResolver identityResolver, PaperServerAccess server) {

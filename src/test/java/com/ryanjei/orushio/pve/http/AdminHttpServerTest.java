@@ -81,9 +81,9 @@ class AdminHttpServerTest {
         }
     }
     @Test void セットアップ管理者付与APIは認証OriginCsrfを要求しオンラインUUIDだけを受け付ける() throws Exception {
-        FakeAdministration administration = new FakeAdministration(); UUID playerId = UUID.randomUUID(); administration.online.add(new OnlinePlayerView(playerId,"Player_1",false));
+        FakeAdministration administration = new FakeAdministration(); UUID playerId = UUID.randomUUID(); administration.online.add(new OnlinePlayerView(playerId,"Player_1",false,false));
         try (AuthenticatedServer test = authenticated(administration)) {
-            var success=test.mutate("/api/v1/players/setup-administrator","PUT","{\"uuid\":\""+playerId+"\"}");assertEquals(200,success.statusCode());assertTrue(success.body().contains("\"setupAdministrator\":true"));var revoked=test.mutate("/api/v1/players/setup-administrator","DELETE","{\"uuid\":\""+playerId+"\"}");assertEquals(200,revoked.statusCode());assertTrue(revoked.body().contains("\"setupAdministrator\":false"));
+            var success=test.mutate("/api/v1/players/setup-administrator","PUT","{\"uuid\":\""+playerId+"\"}");assertEquals(200,success.statusCode());assertTrue(success.body().contains("\"setupAdministrator\":true"));assertTrue(success.body().contains("\"administratorRevocable\":true"));var revoked=test.mutate("/api/v1/players/setup-administrator","DELETE","{\"uuid\":\""+playerId+"\"}");assertEquals(200,revoked.statusCode());assertTrue(revoked.body().contains("\"setupAdministrator\":false"));
             assertEquals(409,test.mutate("/api/v1/players/setup-administrator","PUT","{\"uuid\":\""+UUID.randomUUID()+"\"}").statusCode());
             var unauth=HttpRequest.newBuilder(URI.create(test.baseUrl+"/api/v1/players/setup-administrator")).header("Origin",test.baseUrl).header("X-CSRF-Token",test.csrfValue).PUT(HttpRequest.BodyPublishers.ofString("{\"uuid\":\""+playerId+"\"}")).build();assertEquals(401,client.send(unauth,HttpResponse.BodyHandlers.ofString()).statusCode());
             var badCsrf=HttpRequest.newBuilder(URI.create(test.baseUrl+"/api/v1/players/setup-administrator")).header("Cookie",test.cookieValue).header("Origin",test.baseUrl).header("X-CSRF-Token","bad").PUT(HttpRequest.BodyPublishers.ofString("{\"uuid\":\""+playerId+"\"}")).build();assertEquals(403,client.send(badCsrf,HttpResponse.BodyHandlers.ofString()).statusCode());

@@ -23,5 +23,6 @@ public final class PaperMapWorldGateway implements MapWorldGateway {
     static void validateAdministrator(boolean online,boolean op,boolean permitted){if(!online||!op||!permitted)throw new SecurityException("オンラインの許可済み管理者が必要です。");}
     private static void rollbackLoadedWorld(World world){World fallback=Bukkit.getWorlds().stream().filter(w->!w.equals(world)).findFirst().orElseThrow(()->new IllegalStateException("帰還先ワールドがありません。"));for(var player:world.getPlayers())player.teleport(fallback.getSpawnLocation());if(!Bukkit.unloadWorld(world,false))throw new IllegalStateException("一時ワールドをアンロードできません。");}
     public boolean isTool(ItemStack item){return isOwnedTool(item,key);}
+    void cleanupOwnedTools(org.bukkit.entity.Player player){removeOwnedTools(player.getInventory());}
     private<T>T execute(java.util.concurrent.Callable<T> task){try{return executor.execute(task,Duration.ofSeconds(5));}catch(Exception e){throw new MapIoException("PAPER_WORLD","Paperワールド操作に失敗しました。",e);}}
 }
