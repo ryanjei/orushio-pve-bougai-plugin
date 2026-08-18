@@ -1,4 +1,4 @@
-let csrf = '', current = null, lifecycle = null, lifecycleMaps = [], loading = false, onlinePlayers = [], setupRevision = -1, activeSetupAdministrator = '';
+let csrf = '', current = null, lifecycle = null, lifecycleMaps = [], loading = false, lifecyclePolling = false, onlinePlayers = [], setupRevision = -1, activeSetupAdministrator = '';
 const $ = id => document.getElementById(id);
 const escapeHtml = value => { const node = document.createElement('div'); node.textContent = String(value); return node.innerHTML; };
 async function api(path, options = {}) { options.headers = { 'Content-Type': 'application/json', ...(options.headers || {}), 'X-CSRF-Token': csrf }; const response = await fetch('/api/v1' + path, options); const json = await response.json(); if (!response.ok) { const error = new Error(json.error?.message || '操作に失敗しました'); error.traceId = json.error?.traceId; throw error; } return json.data; }
@@ -10,7 +10,7 @@ function gameStateLabel(state) { return {IDLE:'待機中',RECRUITING:'待機中'
 function renderStatus(status) { current = status; $('paper').textContent = status.paperRunning ? '稼働中' : '停止'; $('state').textContent = gameStateLabel(status.gameState); $('participants').textContent = `${status.participantCount} / ${status.participantLimit}`; $('warnings').innerHTML = (status.warnings || []).map(value => `<li>${escapeHtml(value)}</li>`).join('') || '<li class="empty">警告はありません</li>'; }
 function renderPlayers(playerResult) { onlinePlayers=playerResult.players; $('players').innerHTML = playerResult.players.map(player => `<li><span>${escapeHtml(player.name)}<small>${player.setupAdministrator ? player.administratorRevocable ? '管理者利用可能 / OPBPから解除可能' : '既存OP / OPBPからは解除不可' : '管理者権限なし'}</small></span><span class="actions inline"><button class="secondary" data-copy-name="${escapeHtml(player.name)}">名前をコピー</button>${player.setupAdministrator ? player.administratorRevocable ? `<button class="danger" data-revoke-administrator="${escapeHtml(player.uuid)}">管理者を解除</button>` : `<button data-adopt-administrator="${escapeHtml(player.uuid)}">OPBP管理として引き継ぐ</button>` : `<button data-setup-administrator="${escapeHtml(player.uuid)}">セットアップ管理者にする</button>`}</span></li>`).join('') || '<li class="empty">現在オンラインのプレイヤーはいません</li>'; $('online-count').textContent = `${playerResult.players.length}人がオンライン`; const administrators=playerResult.players.filter(player=>player.setupAdministrator); $('setup-admin').innerHTML=administrators.map(player=>`<option value="${escapeHtml(player.uuid)}">${escapeHtml(player.name)}（管理者利用可能）</option>`).join('')||'<option value="">オンラインのセットアップ管理者がいません</option>'; }
 
-async function loadLifecycle() {
+async function loadLifecycle(silent = false) {
   try {
     if (!csrf) csrf = (await api('/auth/session')).csrfToken;
     const maps = await api('/maps'); lifecycleMaps = maps.maps.filter(map => map.enabled && map.setupComplete);
@@ -20,12 +20,12 @@ async function loadLifecycle() {
     const mapId = $('game-map').value;
     lifecycle = await api(`/game/lifecycle${mapId ? `?mapId=${encodeURIComponent(mapId)}` : ''}`);
     renderLifecycle(lifecycle);
-  } catch (error) { notify(error.message, 'error', error.traceId); }
+  } catch (error) { if(!silent)notify(error.message, 'error', error.traceId); }
 }
 function renderLifecycle(value) {
   $('lifecycle-state').textContent = `${value.stateLabel} / 参加者 ${value.participantCount}人${value.remainingSeconds > 0 ? ` / 残り ${Math.ceil(value.remainingSeconds / 60)}分` : ''}`;
   const runtime=value.runtime||{};
-  $('runtime-status').innerHTML=`<strong>ゲームワールド:</strong> ${escapeHtml(runtime.worldStatus||'未作成')}　<strong>マップ:</strong> ${escapeHtml(runtime.mapStatus||'未作成')}　<strong>転送:</strong> ${escapeHtml(runtime.transferStatus||'未実行')}${runtime.error?`<br><span class="error">${escapeHtml(runtime.error)}</span>`:''}`;
+  $('runtime-status').innerHTML=`<strong>ゲームワールド:</strong> ${escapeHtml(runtime.worldState||'未準備')}　<strong>マップ:</strong> ${escapeHtml(runtime.mapState||'未準備')}　<strong>転送:</strong> ${escapeHtml(runtime.transferState||'未実行')}${runtime.error?`<br><span class="error">${escapeHtml(runtime.error)}</span>`:''}`;
   $('game-participant-heading').textContent = `ゲーム参加者（1～${value.participantLimit}人）`;
   const selected = new Set(value.participants.map(player => player.uuid));
   const participantRows = value.participants.map(player => `<li><span>${escapeHtml(player.name)}<small>参加者に選択済み / ${player.connected ? 'オンライン' : 'オフライン（参加登録は維持）'}</small></span><button data-game-participant="${escapeHtml(player.uuid)}" data-selected="true" class="danger">参加から外す</button></li>`);
@@ -43,6 +43,7 @@ function renderLifecycle(value) {
   $('game-activate').disabled = value.state !== 'PREPARING'; $('game-abort').disabled = !['PREPARING','ACTIVE','ABORTING','RECOVERING'].includes(value.state); $('game-abort').textContent = ['ABORTING','RECOVERING'].includes(value.state) ? '復旧清掃を再試行' : 'ゲームを中止';
   document.querySelectorAll('[data-game-participant]').forEach(button => button.disabled = !editable);
 }
+async function loadLifecycleSilently(){if(loading||lifecyclePolling||$('game').hidden)return;lifecyclePolling=true;try{const mapId=$('game-map').value;lifecycle=await api(`/game/lifecycle${mapId?`?mapId=${encodeURIComponent(mapId)}`:''}`);renderLifecycle(lifecycle);}catch{/* 操作通知を上書きせず次回に再試行する。 */}finally{lifecyclePolling=false;}}
 function optionalNumber(id) { const value = $(id).value.trim(); return value === '' ? null : Number(value); }
 
 async function refresh(options = { notifyResult: true, silent: false }) {
@@ -72,8 +73,8 @@ $('whitelist-players').onclick = event => { const name = event.target.dataset.re
 $('players').onclick = async event => { const uuid = event.target.dataset.setupAdministrator, revoke = event.target.dataset.revokeAdministrator, adopt=event.target.dataset.adoptAdministrator, name=event.target.dataset.copyName; if(name){try{await navigator.clipboard.writeText(name);notify(`${name} をコピーしました`,'success');}catch{notify('ユーザー名をコピーできませんでした','error');}}if (uuid && confirm('このオンラインプレイヤーへセットアップ管理者権限を付与しますか？')) mutate('/players/setup-administrator', 'PUT', { uuid }, 'セットアップ管理者に設定しました');if(adopt&&confirm('この既存OPをOPBP管理として引き継ぎますか？ 引き継ぎ後は管理画面からOPを解除できるようになります。'))mutate('/players/setup-administrator/ownership','POST',{uuid:adopt},'OPBP管理として引き継ぎました');if(revoke&&confirm('OPBPから付与したセットアップ管理者権限を解除しますか？'))mutate('/players/setup-administrator','DELETE',{uuid:revoke},'セットアップ管理者を解除しました'); };
 $('start').onclick = () => mutate('/game/recruiting/start', 'POST', {}, '参加受付を開始しました', { 'If-Game-State': current.gameState });
 $('close').onclick = () => mutate('/game/recruiting/close', 'POST', {}, '参加受付を終了しました', { 'If-Session-Id': current.sessionId });
-$('lifecycle-refresh').onclick = loadLifecycle;
-$('game-map').onchange = loadLifecycle;
+$('lifecycle-refresh').onclick = () => loadLifecycle();
+$('game-map').onchange = () => loadLifecycle();
 $('game-participants').onclick = async event => { const uuid=event.target.dataset.gameParticipant;if(!uuid)return;try{await api('/game/lifecycle/participants',{method:event.target.dataset.selected==='true'?'DELETE':'PUT',body:JSON.stringify({uuid})});notify('ゲーム参加者を更新しました','success');await loadLifecycle();}catch(error){notify(error.message,'error',error.traceId);} };
 $('game-save-settings').onclick = async()=>{const mapId=$('game-map').value;try{await api('/game/lifecycle/settings',{method:'PUT',body:JSON.stringify({mapId,timeLimitMinutes:optionalNumber('game-time-limit'),requiredNormalCores:optionalNumber('game-required-cores'),enemyMultiplier:optionalNumber('game-enemy-multiplier')})});notify('マップ別の開始設定を保存しました','success');await loadLifecycle();}catch(error){notify(error.message,'error',error.traceId);}};
 $('game-prepare').onclick=async()=>{if(!lifecycle?.start)return;const s=lifecycle.start;if(!confirm(`${s.displayName}でゲーム準備を開始しますか？\n参加者: ${s.participants.map(p=>p.name).join('、')}\n制限時間: ${s.resolved.timeLimitMinutes}分\n通常コア: ${s.resolved.requiredNormalCores}個\n敵人数倍率: ${s.resolved.enemyMultiplier}`))return;try{await api('/game/lifecycle/prepare',{method:'POST',headers:{'If-Game-State':lifecycle.state},body:JSON.stringify({mapId:s.mapId})});notify('ゲーム準備中へ移行しました。準備完了後に進行開始してください','success');await refresh({notifyResult:false});await loadLifecycle();}catch(error){notify(error.message,'error',error.traceId);}};
@@ -93,4 +94,4 @@ $('spawn-marker-areas').onclick=async event=>{const action=event.target.dataset.
 async function loadSetupSilently(force=false){if(loading||$('maps-page').hidden)return;try{const setup=await api('/maps/setup');if(force||Number(setup.revision??-1)!==setupRevision)renderSetup(setup);}catch{/* 定期更新失敗は操作通知を上書きせず、次回に再試行する。 */}}
 $('setup-save').onclick=async()=>{try{await api('/maps/setup/save',{method:'POST',headers:{'If-Session-Id':current.sessionId}});notify('セットアップを保存しました','success');await refresh({notifyResult:false});await loadMaps();}catch(error){notify(error.message,'error',error.traceId);}};
 $('setup-discard').onclick=async()=>{if(!confirm('今回のセットアップ変更を破棄しますか？'))return;try{await api('/maps/setup/discard',{method:'POST',headers:{'If-Session-Id':current.sessionId}});notify('セットアップを破棄しました','success');await refresh({notifyResult:false});await loadMaps();}catch(error){notify(error.message,'error',error.traceId);}};
-refresh(); setInterval(() => refresh({ notifyResult: false, silent: true }), 5000); setInterval(() => loadSetupSilently(), 1500);
+refresh(); setInterval(() => refresh({ notifyResult: false, silent: true }), 5000); setInterval(() => loadSetupSilently(), 1500); setInterval(() => loadLifecycleSilently(), 1500);

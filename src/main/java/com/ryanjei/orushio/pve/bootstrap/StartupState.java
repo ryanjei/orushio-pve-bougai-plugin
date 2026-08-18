@@ -36,6 +36,16 @@ public record StartupState(
     }
 
     public boolean diagnosticMode() {
-        return configuration.diagnosticMode() || recoveryRequired;
+        return configuration.diagnosticMode() || !sessionLoaded;
+    }
+
+    public boolean recoverableGameSession() { return sessionLoaded && recoveryRequired && session.isPresent(); }
+
+    public static GameSession recoverySessionAfterRestart(GameSession session) {
+        return switch (session.state()) {
+            case PREPARING, ACTIVE, PAUSED -> session.transitionedTo(GameState.ABORTING).transitionedTo(GameState.RECOVERING);
+            case CLEAR, ABORTING -> session.transitionedTo(GameState.RECOVERING);
+            default -> session;
+        };
     }
 }

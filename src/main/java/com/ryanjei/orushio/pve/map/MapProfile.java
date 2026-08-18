@@ -14,7 +14,7 @@ public record MapProfile(MapProfileId mapId, String displayName, boolean enabled
         Objects.requireNonNull(mapId); if(displayName==null||displayName.isBlank())throw new IllegalArgumentException("表示名が必要です。");
         if(templateDirectory==null||templateDirectory.isBlank())throw new IllegalArgumentException("原本識別子が必要です。");
         points=immutable(points);areas=immutable(areas);Objects.requireNonNull(createdAt);spawnMarkers=List.copyOf(spawnMarkers==null?List.of():spawnMarkers);
-        Set<UUID> markerIds=new HashSet<>();for(SpawnMarker marker:spawnMarkers){if(!markerIds.add(marker.markerId()))throw new IllegalArgumentException("markerIdが重複しています。");if(logicalAreas(areas).stream().noneMatch(area->area.areaId().equals(marker.areaId())))throw new IllegalArgumentException("Spawn MarkerのAreaが存在しません。");}
+        List<LogicalArea> logicalAreas=logicalAreas(areas);Set<UUID> markerIds=new HashSet<>();for(SpawnMarker marker:spawnMarkers){if(!markerIds.add(marker.markerId()))throw new IllegalArgumentException("markerIdが重複しています。");LogicalArea area=logicalAreas.stream().filter(value->value.areaId().equals(marker.areaId())).findFirst().orElseThrow(()->new IllegalArgumentException("Spawn MarkerのAreaが存在しません。"));if(!contains(area.region(),marker.position()))throw new IllegalArgumentException("Spawn Markerが所属Areaの範囲外です。");}
         if(enabled&&!missing(points,areas).isEmpty())throw new IllegalArgumentException("必須設定が不足しているため有効化できません。");
     }
     public MapProfile(MapProfileId mapId,String displayName,boolean enabled,String templateDirectory,Map<String,List<BlockPoint>> points,Map<String,List<Cuboid>> areas,Instant createdAt){this(mapId,displayName,enabled,templateDirectory,points,areas,createdAt,List.of());}
@@ -26,4 +26,5 @@ public record MapProfile(MapProfileId mapId, String displayName, boolean enabled
     public MapProfile withDraft(Map<String,List<BlockPoint>> newPoints,Map<String,List<Cuboid>> newAreas,List<SpawnMarker> markers){return new MapProfile(mapId,displayName,false,templateDirectory,newPoints,newAreas,createdAt,markers);}
     public List<LogicalArea> logicalAreas(){return logicalAreas(areas);}
     private static List<LogicalArea> logicalAreas(Map<String,List<Cuboid>> values){List<LogicalArea> result=new ArrayList<>();values.forEach((field,regions)->{for(int i=0;i<regions.size();i++)result.add(new LogicalArea(field+":"+i,field,MapFieldCatalog.label(field),i,regions.get(i)));});return List.copyOf(result);}
+    private static boolean contains(Cuboid area,BlockPoint point){return point.x()>=area.minX()&&point.x()<=area.maxX()&&point.y()>=area.minY()&&point.y()<=area.maxY()&&point.z()>=area.minZ()&&point.z()<=area.maxZ();}
 }

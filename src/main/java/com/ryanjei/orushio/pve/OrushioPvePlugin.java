@@ -53,7 +53,8 @@ public final class OrushioPvePlugin extends JavaPlugin {
             MapProfileRepository mapProfiles = new YamlMapProfileRepository(mapsRoot);
             TemporaryWorldManager temporaryWorlds = new TemporaryWorldManager(
                     mapsRoot, getServer().getWorldContainer().toPath());
-            temporaryWorlds.prepareStartupRecovery();
+            String recoverySessionId=startup.recoverableGameSession()?startup.session().orElseThrow().sessionId().toString():"";
+            temporaryWorlds.prepareStartupRecovery(recoverySessionId,!startup.sessionLoaded());
             java.util.concurrent.CompletableFuture.runAsync(temporaryWorlds::recoverPreparedWorlds)
                     .exceptionally(error -> {
                         getLogger().severe("起動時の一時ワールド回収に失敗しました。管理画面の診断情報を確認してください。");
@@ -88,7 +89,9 @@ public final class OrushioPvePlugin extends JavaPlugin {
                     InetAddress.getByName("127.0.0.1"), config.port(), games, serverAdministration, maps,
                     new AuthService(),
                     () -> diagnostics(startup, audit, bound[0], data, games, temporaryWorlds),
-                    audit, startup.diagnosticMode(), shutdownToken, shutdownController::request);
+                    audit, ()->startup.diagnosticMode()||temporaryWorlds.recoveryRequired(),
+                    ()->games.current().state()==com.ryanjei.orushio.pve.domain.GameState.RECOVERING,
+                    shutdownToken, shutdownController::request);
             http.start();
             bound[0] = true;
             bootstrapHandoff.publish(config.port(), http.issueBootstrapToken());
@@ -119,7 +122,7 @@ public final class OrushioPvePlugin extends JavaPlugin {
             };
         } else {
             repository = new YamlActiveSessionRepository(data.resolve("sessions/active.yml"));
-            GameSession recovered = recoverySessionAfterRestart(initial);
+            GameSession recovered = StartupState.recoverySessionAfterRestart(initial);
             if (recovered != initial) {
                 repository.save(recovered);
                 initial = recovered;
@@ -129,15 +132,6 @@ public final class OrushioPvePlugin extends JavaPlugin {
         return new DefaultGameApplicationService(
                 repository, initial, serverAdministration::onlinePlayers, maps,
                 new YamlGameLaunchSettingsRepository(mapsRoot), lifecycleSteps, audit);
-    }
-
-    private static GameSession recoverySessionAfterRestart(GameSession session) {
-        return switch (session.state()) {
-            case PREPARING, ACTIVE -> session.transitionedTo(com.ryanjei.orushio.pve.domain.GameState.ABORTING)
-                    .transitionedTo(com.ryanjei.orushio.pve.domain.GameState.RECOVERING);
-            case ABORTING -> session.transitionedTo(com.ryanjei.orushio.pve.domain.GameState.RECOVERING);
-            default -> session;
-        };
     }
 
     private void expireGameSafely(DefaultGameApplicationService games) {
@@ -153,10 +147,11 @@ public final class OrushioPvePlugin extends JavaPlugin {
             StartupState startup, AuditLog audit, boolean bound, Path data,
             DefaultGameApplicationService games, TemporaryWorldManager temporaryWorlds) {
         RuntimeConfiguration configuration = startup.configuration();
-        List<String> warnings = new ArrayList<>(startup.warnings());
+        boolean gameRecoveryRequired = games.current().state() == com.ryanjei.orushio.pve.domain.GameState.RECOVERING;
+        List<String> warnings = new ArrayList<>(startup.recoverableGameSession()&&!gameRecoveryRequired
+                ? startup.configuration().warnings() : startup.warnings());
         if (!audit.healthy()) warnings.add("監査ログへ書き込めません。");
         temporaryWorlds.startupRecoveryWarning().ifPresent(warnings::add);
-        boolean gameRecoveryRequired = games.current().state() == com.ryanjei.orushio.pve.domain.GameState.RECOVERING;
         if (gameRecoveryRequired) warnings.add("ゲーム準備または清掃が完了していません。復旧清掃を再試行してください。");
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("paperRunning", true);
@@ -166,9 +161,9 @@ public final class OrushioPvePlugin extends JavaPlugin {
         result.put("configLoaded", configuration.configLoaded());
         result.put("sessionLoaded", startup.sessionLoaded());
         result.put("recoveryRequired",
-                startup.recoveryRequired() || temporaryWorlds.startupRecoveryWarning().isPresent() || gameRecoveryRequired);
+                (startup.recoveryRequired()&&!startup.recoverableGameSession()) || temporaryWorlds.startupRecoveryWarning().isPresent() || gameRecoveryRequired);
         result.put("temporaryWorldRecoveryComplete", temporaryWorlds.startupRecoveryComplete());
-        result.put("diagnosticMode", startup.diagnosticMode());
+        result.put("diagnosticMode", startup.diagnosticMode()||temporaryWorlds.recoveryRequired());
         result.put("gameState", games.current().state().name());
         result.put("warnings", warnings);
         result.put("traceId", configuration.traceId());

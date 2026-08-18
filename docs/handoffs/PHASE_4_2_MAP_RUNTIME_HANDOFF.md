@@ -4,7 +4,7 @@
 
 - `GameRuntimeLifecycleStep`が選択済み`MapProfile`を`RuntimeMap`へ解決し、Phase 3の`TemporaryWorldManager`でpurpose=`run`の一時worldを作る。
 - ownership markerはmapId、purpose、乱数ownershipId、sessionIdを保持する。削除時はパスと全ownership値が一致したworldだけを対象にする。元テンプレートはコピー元としてのみ読み、ゲーム中の変更はRuntime Worldだけへ入る。
-- 起動前から残る所有一時worldはPhase 3のsnapshot recoveryで回収する。PREPARING／ACTIVE／ABORTINGのactive-sessionが残る再起動はRECOVERINGへ保存し直し、新規ゲームを許可しない。回収不能時はdiagnostics警告と作成ゲートを維持する。
+- 起動前から残るsetup worldと無関係なrun worldはPhase 3のsnapshot recoveryで回収する。正常schemaの未完了active-sessionはHard Diagnosticと分離したRecoverable状態としてRECOVERINGへ保存し、そのsessionIdのrun worldだけをsnapshot回収から保護する。破損／未知schema／所有証明不能はHard Diagnosticとして全mutationを拒否する。
 
 ## lifecycle、参加者、ロビー
 
@@ -12,7 +12,7 @@
 - world load、gamerule、world border／高さ検証、teleport、unloadは`GameThreadExecutor`経由でPaper main thread上に限定する。worldコピー・削除はPaper main threadで行わない。
 - オフライン参加者は開始を妨げずGameSessionへ残る。ACTIVE中のParticipant再接続だけをゲーム開始地点（Phase 3の`combatEntry`）へ戻す。非Participantは転送しない。
 - Phase 4.2のロビー実装はRuntime World以外で最初に利用可能な通常worldのspawnを使い、`GameRuntimeGateway`境界の内側へ隔離した。将来の明示Lobby SpawnはこのGateway実装を差し替える。
-- cleanupはPlayerをロビーへ戻し、worldにPlayerがいないことを確認し、unloadしてからownership検証付き削除を行う。失敗はRECOVERINGに残り「復旧清掃を再試行」で同じ処理を再試行する。終了時オフラインだった参加者はPhase 4.1のpending cleanupで次回接続時にロビー復帰する。
+- 再起動後のcleanupはsessionId、mapId、purpose=`run`が一致するOwnedWorldをmarkerから再発見する。Playerをロビーへ戻し、worldにPlayerがいないことを確認し、unloadしてからownership検証付き削除を行う。全処理成功後だけIDLEへ進む。失敗はRECOVERINGに残り「復旧清掃を再試行」で同じ処理を再試行する。終了時オフラインだった参加者はPhase 4.1のpending cleanupで次回接続時にロビー復帰する。
 
 ## Area、Spawn Marker、schema
 
@@ -25,6 +25,8 @@
 
 - Marker追加・座標変更・有効切替・削除は編集中Draftだけを変更する。保存終了で正本へ反映し、破棄終了では保存済みMarkerへ戻る。
 - APIは`PUT /maps/setup/marker/select`、`PUT|DELETE /maps/setup/marker`、`POST /maps/setup/marker/teleport`を追加した。既存のlocalhost、認証、Host、Origin、CSRF、diagnostic mode拒否、audit、traceIdを通る。
+- Recoverable状態では通常mutationと新規Map Setupを拒否し、`POST /game/lifecycle/abort`の復旧清掃だけを許可する。Hard Diagnosticでは復旧清掃も拒否する。
+- Runtime状態JSONの正本keyは`worldState`、`mapState`、`transferState`、`error`で、管理画面も同じkeyを参照する。
 - 管理画面はMarkerをArea別`details`へ折りたたみ、件数、短縮ID、座標、有効状態、変更、テレポート、削除を表示する。削除は確認必須。Yaw/Pitchは「向き: 東」「視線: 水平」を主表示し数値を詳細として併記する。
 - SetupViewのrevisionを1.5秒ごとに静かに確認し、変更時だけsetupコンポーネントを再描画する。global loading、画面暗転、操作通知の上書きは行わない。
 
