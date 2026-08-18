@@ -15,6 +15,7 @@ public final class TemporaryWorldManager {
     private OwnedWorld recoveryTarget;
     private String protectedRunSessionId = "";
     private boolean protectAllRunWorlds;
+    private boolean protectAllSetupWorlds;
     public TemporaryWorldManager(Path mapsRoot, Path worldContainer) { this.mapsRoot=mapsRoot.toAbsolutePath().normalize(); this.worldContainer=worldContainer.toAbsolutePath().normalize(); }
 
     public synchronized OwnedWorld create(MapProfile profile, String purpose) {return create(profile,purpose,"");}
@@ -53,11 +54,15 @@ public final class TemporaryWorldManager {
         prepareStartupRecovery(protectedRunSessionId,false);
     }
     public synchronized void prepareStartupRecovery(String protectedRunSessionId,boolean protectAllRunWorlds) {
+        prepareStartupRecovery(protectedRunSessionId,protectAllRunWorlds,false);
+    }
+    public synchronized void prepareStartupRecovery(String protectedRunSessionId,boolean protectAllRunWorlds,boolean protectAllSetupWorlds) {
         if (startupRecoveryPrepared) throw new IllegalStateException("起動時回収はすでに準備されています。");
         startupRecoveryPrepared = true;
         startupRecoveryComplete = false;
         this.protectedRunSessionId=protectedRunSessionId==null?"":protectedRunSessionId;
         this.protectAllRunWorlds=protectAllRunWorlds;
+        this.protectAllSetupWorlds=protectAllSetupWorlds;
     }
 
     public List<Path> recoverPreparedWorlds() { return recoverPreparedWorlds(() -> {}); }
@@ -67,7 +72,10 @@ public final class TemporaryWorldManager {
             List<OwnedWorld> stale;
             synchronized (this) {
                 if (!startupRecoveryPrepared || startupRecoveryComplete) throw new IllegalStateException("起動時回収が準備されていません。");
-                stale = ownedWorlds().stream().filter(world->!world.purpose().equals("run")||(!protectAllRunWorlds&&!world.sessionId().equals(protectedRunSessionId))).toList();
+                stale = ownedWorlds().stream().filter(world->{
+                    if(world.purpose().equals("setup"))return !protectAllSetupWorlds;
+                    return !protectAllRunWorlds&&!world.sessionId().equals(protectedRunSessionId);
+                }).toList();
             }
             afterSnapshot.run();
             List<Path> removed = new ArrayList<>();
@@ -94,6 +102,7 @@ public final class TemporaryWorldManager {
         if(matches.size()>1)throw ownershipFailure("同じゲームセッションの一時ワールドが複数存在します。");
         return matches.stream().findFirst();
     }
+    public synchronized List<OwnedWorld> setupWorlds() { return ownedWorlds().stream().filter(world->world.purpose().equals("setup")).toList(); }
     public synchronized Optional<String> startupRecoveryWarning() { if(startupRecoveryFailure==null)return Optional.empty();if(recoveryTarget!=null)return Optional.of("一時ワールド「"+recoveryTarget.worldName()+"」を安全に回収できません。再起動または手動確認が必要です。");return Optional.of("起動時の一時ワールド回収に失敗しました。手動確認が必要です。"); }
 
     private List<OwnedWorld> ownedWorlds() {
