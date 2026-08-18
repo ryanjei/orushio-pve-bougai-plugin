@@ -42,10 +42,13 @@ public record StartupState(
     public boolean recoverableGameSession() { return sessionLoaded && recoveryRequired && session.isPresent(); }
 
     public static GameSession recoverySessionAfterRestart(GameSession session) {
-        return switch (session.state()) {
+        GameSession recovering = switch (session.state()) {
             case PREPARING, ACTIVE, PAUSED -> session.transitionedTo(GameState.ABORTING).transitionedTo(GameState.RECOVERING);
             case CLEAR, ABORTING -> session.transitionedTo(GameState.RECOVERING);
             default -> session;
         };
+        return recovering.state() == GameState.RECOVERING
+                ? recovering.withAllParticipantsDisconnected()
+                : recovering;
     }
 }

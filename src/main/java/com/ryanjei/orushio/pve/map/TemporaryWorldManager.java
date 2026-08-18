@@ -84,6 +84,7 @@ public final class TemporaryWorldManager {
     public synchronized List<Path> recoverOwnedWorlds() { List<Path> removed=new ArrayList<>(); for(OwnedWorld world:ownedWorlds()){delete(world);removed.add(world.directory());} return List.copyOf(removed); }
     public synchronized boolean startupRecoveryComplete() { return startupRecoveryComplete; }
     public synchronized void requireRecovery(OwnedWorld world,String reason) { recoveryTarget=Objects.requireNonNull(world); startupRecoveryFailure=new MapIoException("WORLD_RECOVERY",reason); }
+    public synchronized void requireRecovery(String reason) { recoveryTarget=null; startupRecoveryFailure=new MapIoException("WORLD_RECOVERY",reason); }
     public synchronized boolean recoveryRequired() { return startupRecoveryFailure!=null; }
     public synchronized Optional<OwnedWorld> recoveryTarget() { return Optional.ofNullable(recoveryTarget); }
     public synchronized Optional<OwnedWorld> findRunWorld(String sessionId,MapProfileId mapId) {
