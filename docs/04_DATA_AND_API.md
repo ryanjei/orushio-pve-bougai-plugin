@@ -2,7 +2,7 @@
 
 ## 1. 永続データ
 
-設定、MapProfile、Session、Snapshot、Result、operationはYAML、監査ログは日次JSON Linesで保存する。保存場所は`00_FIXED_DECISIONS.md`を正本とする。
+設定、MapProfile、Session、Result、operationはYAML、監査ログは日次JSON Linesで保存する。保存場所は`00_FIXED_DECISIONS.md`を正本とする。通常サバイバルInventoryのSnapshot保存・復元はPhase 4正式要件に含めない。
 
 | データ | 保持期間 | 目的 |
 |---|---|---|
@@ -50,6 +50,8 @@ Phase 3で永続化するMapProfile契約は、`mapId`、`displayName`、`enable
 
 ### GameSession
 
+以下は後続Phaseで検討するSession schema候補であり、Phase 4.2.1でschema変更は行わない。項目名・形式・採否は後続Phaseで確定する。
+
 ```text
 sessionId
 state
@@ -86,8 +88,8 @@ PointはParticipant UUIDごとの個人残高とし、GameSession全体の共有
 
 ## 3. 設定の適用
 
-- ゲーム開始時に`game-config`から`difficultySnapshot`と使用設定をセッションへ複製する。
-- 実行中ゲームは原則としてスナップショットを使う。
+- ゲーム開始時に使用設定をSessionへ固定する方式は後続Phaseのschema候補とする。Phase 4.2.1ではschema変更を行わない。
+- ここでいう設定の固定コピー候補は通常サバイバルInventory Snapshotとは無関係である。
 - 表示時間やログレベルなど安全な項目だけ即時反映する。
 - UIの保存APIは、各項目が即時か次回適用かを返す。
 
@@ -124,13 +126,14 @@ HTTPステータスを適切に使い、常に200でエラーを包まない。
 
 ## 5. 主要エンドポイント
 
+この節はAPIの全体構想を含む。各Phaseで実装済みのEndpointだけを正式受入対象とし、将来候補と明記したEndpointの採否・契約は後続Phaseで確定する。
+
 ### 状態・プレイヤー
 
 - `GET /status`
 - `GET /players`
 - `POST /players/{uuid}/participant`
 - `DELETE /players/{uuid}/participant`
-- `POST /players/{uuid}/restore`
 
 ### ゲーム
 
@@ -138,8 +141,8 @@ HTTPステータスを適切に使い、常に200でエラーを包まない。
 - `POST /game/recruiting/close`
 - `POST /game/prepare`
 - `POST /game/activate`
-- `POST /game/pause`
-- `POST /game/resume`
+- `POST /game/pause`（将来候補）
+- `POST /game/resume`（将来候補）
 - `POST /game/abort`
 - `POST /game/rescue`
 - `GET /game/current`
@@ -164,7 +167,7 @@ HTTPステータスを適切に使い、常に200でエラーを包まない。
 - `POST /maps/{mapId}/setup/start`
 - `POST /maps/{mapId}/enable`
 - `POST /maps/{mapId}/disable`
-- `POST /maps/{mapId}/select-next`
+- `POST /maps/{mapId}/select-next`（自動選択を採用する場合の将来候補）
 - `DELETE /maps/{mapId}`
 
 ### セットアップ
