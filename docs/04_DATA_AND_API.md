@@ -7,11 +7,11 @@
 | データ | 保持期間 | 目的 |
 |---|---|---|
 | system-config | 永続 | HTTP、管理者、保存上限 |
-| game-config | 永続 | バランス、装備、ショップ、妨害 |
+| game-config | 永続 | ゲーム開始設定（制限時間、攻略Core数、敵人数倍率） |
+| gameplay-settings | 永続 | Map別の資源、Point、Enemy、Core、Shop、初期装備 |
 | map-profile | 永続 | mapIdと登録地点・範囲 |
 | map-template | 永続 | 原本ワールド |
 | active-session | ゲーム中 | 状態、runId、参加者、進捗 |
-| player-snapshot | 復元完了まで | ゲーム前状態 |
 | pending-operation | 完了まで | コピー、削除、ZIP取込 |
 | game-result | 永続/保持上限あり | 履歴 |
 | audit-log | ローテーション | 管理操作・警告・エラー |
@@ -77,9 +77,12 @@ playerUuid
 lastKnownName
 connected
 deathCount
-snapshotId
 lastSafeLocationType
+orePoints
+farmingPoints
 ```
+
+PointはParticipant UUIDごとの個人残高とし、GameSession全体の共有財布として保存しない。Shop購入は購入者本人の残高だけを消費する。active-sessionへ追加する場合はschemaVersion 1の安全なoptional keyとしてPhase 4.4で具体形式を定義し、旧Sessionの進行を推測復元しない。
 
 ## 3. 設定の適用
 
