@@ -64,6 +64,9 @@
 - Shop購入はPoint消費とItem付与を一連の処理として扱い、Inventory満杯または付与失敗時にPointを失わない。
 - Shopカテゴリで上位Tierが解禁された場合は同カテゴリの下位Tier商品を購入できず、異なるカテゴリのTierには影響しない。
 - 敵は指定ゾーンだけに生成し、所有タグを持つ。
+- Enemy Zone設定はMap Setupと完全対応し、ACTIVEのRuntime Worldだけで単一周期spawnを行う。開始時Participant数でspawn数だけを補正し、個体能力は補正しない。
+- OPBP EnemyはPDCのmarker、sessionId、enemyZoneIdで所有確認し、自然Mob・他Plugin Entity・別Session Entityをcleanupしない。
+- OPBP CreeperによるRuntime MapのBlock破壊だけを無効化し、Entity damageと他WorldのCreeper挙動は変更しない。
 - 開始時参加人数と敵人数倍率がSessionへ固定され、Enemy個体性能ではなく出現数へ反映される。
 - Map/ゲーム設定で決定された必要通常Core数（現在の既定値2）が候補から重複なしで選ばれる。
 - 設定された必要通常Core数の破壊前に最終ゲートが開かない。
