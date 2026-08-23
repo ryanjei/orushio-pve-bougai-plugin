@@ -44,6 +44,8 @@ class GameLifecycleApplicationServiceTest {
         assertTrue(service.startView("map-a").ready());
     }
 
+    @Test void Readiness不足はまとめて表示しRuntime準備前に拒否する(){RecordingStep runtime=new RecordingStep(false,false);GameReadinessValidator validator=(map,launch)->List.of("資源採取エリアのPoint・再生成設定がありません。","敵出現エリアの敵・出現間隔設定がありません。");var service=new DefaultGameApplicationService(sessions,GameSession.idle(),()->List.copyOf(online),maps,settings,List.of(runtime),new AuditSink(){public void record(String a,String b,String c,String d){}public boolean healthy(){return true;}},ParticipantPolicy.standard(),validator);service.addParticipant(alice);GameStartView view=service.startView("map-a");assertFalse(view.ready());assertEquals(2,view.missing().size());assertThrows(DomainException.class,()->service.prepareGame("IDLE","map-a"));assertEquals(0,runtime.resources);assertEquals(GameState.IDLE,service.current().state());}
+
     @Test void 準備中を明示的に経由して開始時人数とサーバー時刻を固定する() {
         var service=service(); service.addParticipant(alice);
         service.saveLaunchSettings("map-a", new GameLaunchSettings(Optional.of(30), Optional.of(4), Optional.of(1.5)));
