@@ -10,6 +10,8 @@ public interface GameLifecycleStep{
     /** Idempotent recovery cleanup for resources owned by the supplied session. */
     default void cleanup(GameSession session){}
     default void participantConnected(GameSession session,UUID playerId){}
+    default void rollbackParticipantConnection(GameSession session,UUID playerId){}
+    default void participantConnectionCommitted(GameSession session,UUID playerId){}
     /** Returns true only when session-owned pending cleanup completed successfully. */
     default boolean pendingCleanupConnected(GameSession session,UUID playerId){return false;}
     default Set<UUID> pendingCleanupPlayers(GameSession session){return Set.of();}
