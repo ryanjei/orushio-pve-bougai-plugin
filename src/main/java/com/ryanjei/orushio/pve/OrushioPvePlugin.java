@@ -81,7 +81,8 @@ public final class OrushioPvePlugin extends JavaPlugin {
             java.util.concurrent.atomic.AtomicReference<DefaultGameApplicationService> gamesReference=new java.util.concurrent.atomic.AtomicReference<>();
             FarmEconomyLifecycleStep economyStep=new FarmEconomyLifecycleStep(
                     new YamlGameplaySettingsRepository(mapsRoot),runtimeStep,
-                    new PaperFarmEconomyGateway(gameThread,()->gamesReference.get().current(),runtimeStep),audit);
+                    new PaperFarmEconomyGateway(gameThread,()->gamesReference.get().current(),runtimeStep),
+                    new PaperResourceMaterialValidator(),audit);
             DefaultGameApplicationService games = createGames(
                     data, startup, mapSetupConsistency.session(), serverAdministration, mapProfiles, mapsRoot, audit,
                     List.of(inventoryStep, runtimeStep, economyStep));
