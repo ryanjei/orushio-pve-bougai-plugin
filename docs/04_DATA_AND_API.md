@@ -91,6 +91,12 @@ PointはParticipant UUIDごとの個人残高とし、GameSession全体の共有
 
 Phase 4.4ではPoint、解禁Tier、資源再生成待ちはプロセス内のGameSession Runtime状態として保持し、active-session schemaへ追加しない。再起動時は既存RECOVERING契約に従って破棄し、旧Sessionから推測復元しない。
 
+### 4.5 Map別PvE設定
+
+`maps/<mapId>/pve-settings.yml` schemaVersion 1へ、Map別のEnemy Zone設定をAtomic保存する。各設定はstable `enemyZoneId`、Map Setupと一致するRegion、spawn間隔、基礎spawn数、Zombie/Skeleton/CreeperのWeight、Participantとの最小・最大距離を持つ。Map Setup `enemyZones`とは双方向に完全照合し、未設定・余剰・同一Regionへの複数IDを拒否する。
+
+Enemy UUID、次回spawn時刻、追跡状態はGameSession Runtime状態であり永続化しない。Paper EntityにはOPBP marker、sessionId、enemyZoneIdをPDCへ付与し、cleanupはmarkerとsessionIdが一致するEntityだけを対象とする。
+
 ### 4.4 Map別Farm Economy設定
 
 `maps/<mapId>/gameplay-settings.yml` schemaVersion 1へ、Map別のFarm Economy設定をAtomic保存する。

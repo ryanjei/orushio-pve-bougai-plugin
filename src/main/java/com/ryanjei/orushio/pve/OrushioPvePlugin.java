@@ -12,6 +12,7 @@ import com.ryanjei.orushio.pve.logging.AuditLog;
 import com.ryanjei.orushio.pve.map.*;
 import com.ryanjei.orushio.pve.paper.*;
 import com.ryanjei.orushio.pve.persistence.*;
+import com.ryanjei.orushio.pve.pve.*;
 import com.ryanjei.orushio.pve.security.AuthService;
 import com.ryanjei.orushio.pve.security.LauncherShutdownToken;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -32,6 +33,7 @@ public final class OrushioPvePlugin extends JavaPlugin {
     private LauncherShutdownHandoff shutdownHandoff;
     private BukkitTask lifecycleTimer;
     private BukkitTask economyTimer;
+    private BukkitTask pveTimer;
     private ParticipantConnectionDispatcher participantConnections;
 
     @Override
@@ -83,9 +85,12 @@ public final class OrushioPvePlugin extends JavaPlugin {
                     new YamlGameplaySettingsRepository(mapsRoot),runtimeStep,
                     new PaperFarmEconomyGateway(gameThread,()->gamesReference.get().current(),runtimeStep),
                     new PaperResourceMaterialValidator(),audit);
+            Random pveRandom=new Random();RandomSource pveRandomSource=pveRandom::nextInt;
+            PaperPveEnemyGateway pveGateway=new PaperPveEnemyGateway(this,gameThread,()->gamesReference.get().current(),runtimeStep,pveRandomSource);
+            PveLifecycleStep pveStep=new PveLifecycleStep(new YamlPveSettingsRepository(mapsRoot),runtimeStep,pveGateway,pveRandomSource,audit);
             DefaultGameApplicationService games = createGames(
                     data, startup, mapSetupConsistency.session(), serverAdministration, mapProfiles, mapsRoot, audit,
-                    List.of(inventoryStep, runtimeStep, economyStep));
+                    List.of(inventoryStep, runtimeStep, economyStep, pveStep));
             gamesReference.set(games);
             MapAdministrationService maps = new DefaultMapAdministrationService(
                     mapsRoot, mapProfiles,
@@ -98,9 +103,11 @@ public final class OrushioPvePlugin extends JavaPlugin {
                                 "ゲーム参加者の接続状態を保存できませんでした。管理画面の診断情報を確認してください。"));
                 getServer().getPluginManager().registerEvents(new GameLifecycleListener(participantConnections), this);
                 getServer().getPluginManager().registerEvents(new FarmEconomyListener(games,economyStep),this);
+                getServer().getPluginManager().registerEvents(new PveEnemyListener(games,pveStep,pveGateway,new PaperProjectileOwnershipGateway(this,gameThread)),this);
                 lifecycleTimer = getServer().getScheduler().runTaskTimerAsynchronously(this,
                         () -> expireGameSafely(games), 20L, 20L);
                 economyTimer=getServer().getScheduler().runTaskTimer(this,()->economyStep.tick(games.current(),Instant.now()),20L,20L);
+                pveTimer=getServer().getScheduler().runTaskTimer(this,()->tickPveSafely(games,pveStep),20L,20L);
             }
 
             ensureSecrets(data, config);
@@ -166,6 +173,11 @@ public final class OrushioPvePlugin extends JavaPlugin {
         }
     }
 
+    private void tickPveSafely(DefaultGameApplicationService games,PveLifecycleStep pve) {
+        try { pve.tick(games.current(),Instant.now()); }
+        catch (RuntimeException failure) { getLogger().log(Level.SEVERE,"PvE周期処理に失敗しました。次の周期で再試行します。"); }
+    }
+
     private Map<String, Object> diagnostics(
             StartupState startup, MapSetupStartupConsistency.Result mapSetupConsistency,
             AuditLog audit, boolean bound, Path data,
@@ -212,6 +224,7 @@ public final class OrushioPvePlugin extends JavaPlugin {
             lifecycleTimer = null;
         }
         if(economyTimer!=null){economyTimer.cancel();economyTimer=null;}
+        if(pveTimer!=null){pveTimer.cancel();pveTimer=null;}
         if (participantConnections != null) {
             participantConnections.close();
             participantConnections = null;

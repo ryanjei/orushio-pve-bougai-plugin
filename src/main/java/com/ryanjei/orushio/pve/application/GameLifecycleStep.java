@@ -9,6 +9,8 @@ public interface GameLifecycleStep{
     default void rollbackPreparation(GameSession session){}
     /** Idempotent recovery cleanup for resources owned by the supplied session. */
     default void cleanup(GameSession session){}
+    /** Lower values clean first. World-owning steps must run after entity/player cleanup. */
+    default int cleanupOrder(){return 0;}
     default void participantConnected(GameSession session,UUID playerId){}
     default void rollbackParticipantConnection(GameSession session,UUID playerId){}
     default void participantConnectionCommitted(GameSession session,UUID playerId){}
