@@ -103,7 +103,7 @@ public final class OrushioPvePlugin extends JavaPlugin {
                                 "ゲーム参加者の接続状態を保存できませんでした。管理画面の診断情報を確認してください。"));
                 getServer().getPluginManager().registerEvents(new GameLifecycleListener(participantConnections), this);
                 getServer().getPluginManager().registerEvents(new FarmEconomyListener(games,economyStep),this);
-                getServer().getPluginManager().registerEvents(new PveEnemyListener(games,pveStep,pveGateway),this);
+                getServer().getPluginManager().registerEvents(new PveEnemyListener(games,pveStep,pveGateway,new PaperProjectileOwnershipGateway(this,gameThread)),this);
                 lifecycleTimer = getServer().getScheduler().runTaskTimerAsynchronously(this,
                         () -> expireGameSafely(games), 20L, 20L);
                 economyTimer=getServer().getScheduler().runTaskTimer(this,()->economyStep.tick(games.current(),Instant.now()),20L,20L);
