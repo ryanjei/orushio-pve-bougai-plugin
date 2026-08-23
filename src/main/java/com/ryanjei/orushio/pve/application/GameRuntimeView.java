@@ -1,0 +1,1 @@
+package com.ryanjei.orushio.pve.application;public record GameRuntimeView(String worldState,String mapState,String transferState,String error){public static GameRuntimeView idle(){return new GameRuntimeView("未準備","未準備","未実行","");}}

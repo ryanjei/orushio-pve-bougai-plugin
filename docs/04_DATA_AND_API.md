@@ -2,21 +2,24 @@
 
 ## 1. 永続データ
 
-設定、MapProfile、Session、Snapshot、Result、operationはYAML、監査ログは日次JSON Linesで保存する。保存場所は`00_FIXED_DECISIONS.md`を正本とする。
+設定、MapProfile、Session、Result、operationはYAML、監査ログは日次JSON Linesで保存する。保存場所は`00_FIXED_DECISIONS.md`を正本とする。通常サバイバルInventoryのSnapshot保存・復元はPhase 4正式要件に含めない。
 
 | データ | 保持期間 | 目的 |
 |---|---|---|
 | system-config | 永続 | HTTP、管理者、保存上限 |
-| game-config | 永続 | バランス、装備、ショップ、妨害 |
+| game-config | 永続 | ゲーム開始設定（制限時間、攻略Core数、敵人数倍率） |
+| gameplay-settings | 永続 | Map別の資源、Point、Enemy、Core、Shop、初期装備 |
 | map-profile | 永続 | mapIdと登録地点・範囲 |
 | map-template | 永続 | 原本ワールド |
 | active-session | ゲーム中 | 状態、runId、参加者、進捗 |
-| player-snapshot | 復元完了まで | ゲーム前状態 |
+| pending-player-cleanup | cleanup完了まで | offline ParticipantのplayerUuidと終了元sessionIdによるcleanup ownership証跡 |
 | pending-operation | 完了まで | コピー、削除、ZIP取込 |
 | game-result | 永続/保持上限あり | 履歴 |
 | audit-log | ローテーション | 管理操作・警告・エラー |
 
 すべての設定文書に`schemaVersion`を持たせる。未知の新しいschemaVersionは上書きせず、読込みを停止して診断表示する。
+
+`pending-player-cleanup.yml`はschemaVersion 1とし、論理的に一意な`(playerUuid, sessionId)`だけをAtomic保存する。Inventory内容は保存しない。Inventory削除はこのsessionId付き証跡を正本とし、`active-session.pendingCleanup`にUUIDだけがある旧データからsessionIdを推測・自動migrationしない。証跡がない旧pendingはInventoryを変更せず、確認が必要な状態として維持する。active-session schemaVersion 1は変更しない。
 
 ## 2. 主なモデル
 
@@ -50,6 +53,8 @@ Phase 3で永続化するMapProfile契約は、`mapId`、`displayName`、`enable
 
 ### GameSession
 
+以下は後続Phaseで検討するSession schema候補であり、Phase 4.2.1でschema変更は行わない。項目名・形式・採否は後続Phaseで確定する。
+
 ```text
 sessionId
 state
@@ -77,14 +82,29 @@ playerUuid
 lastKnownName
 connected
 deathCount
-snapshotId
 lastSafeLocationType
+orePoints
+farmingPoints
 ```
+
+PointはParticipant UUIDごとの個人残高とし、GameSession全体の共有財布として保存しない。Shop購入は購入者本人の残高だけを消費する。active-sessionへ追加する場合はschemaVersion 1の安全なoptional keyとしてPhase 4.4で具体形式を定義し、旧Sessionの進行を推測復元しない。
+
+Phase 4.4ではPoint、解禁Tier、資源再生成待ちはプロセス内のGameSession Runtime状態として保持し、active-session schemaへ追加しない。再起動時は既存RECOVERING契約に従って破棄し、旧Sessionから推測復元しない。
+
+### 4.4 Map別Farm Economy設定
+
+`maps/<mapId>/gameplay-settings.yml` schemaVersion 1へ、Map別のFarm Economy設定をAtomic保存する。
+
+- `resourceZones[]`: stable `resourceZoneId`、Pointカテゴリ、Material、1ブロックのPoint値、再生成時間、Region
+- `shops[]`: stable `shopId`、地点、Shopカテゴリ、Tier別の商品
+- 商品: Pointカテゴリ、価格、Item、個数、enchantments、unbreakable
+
+stable IDに配列indexを使用しない。Runtime開始時に、設定のRegionとShop地点がMap Setup済みの`resourceZones` / `shopPoints`に一致することを検証し、不一致は開始失敗とする。Pointや再生成待ちをこのファイルへ保存しない。
 
 ## 3. 設定の適用
 
-- ゲーム開始時に`game-config`から`difficultySnapshot`と使用設定をセッションへ複製する。
-- 実行中ゲームは原則としてスナップショットを使う。
+- ゲーム開始時に使用設定をSessionへ固定する方式は後続Phaseのschema候補とする。Phase 4.2.1ではschema変更を行わない。
+- ここでいう設定の固定コピー候補は通常サバイバルInventory Snapshotとは無関係である。
 - 表示時間やログレベルなど安全な項目だけ即時反映する。
 - UIの保存APIは、各項目が即時か次回適用かを返す。
 
@@ -121,13 +141,14 @@ HTTPステータスを適切に使い、常に200でエラーを包まない。
 
 ## 5. 主要エンドポイント
 
+この節はAPIの全体構想を含む。各Phaseで実装済みのEndpointだけを正式受入対象とし、将来候補と明記したEndpointの採否・契約は後続Phaseで確定する。
+
 ### 状態・プレイヤー
 
 - `GET /status`
 - `GET /players`
 - `POST /players/{uuid}/participant`
 - `DELETE /players/{uuid}/participant`
-- `POST /players/{uuid}/restore`
 
 ### ゲーム
 
@@ -135,8 +156,8 @@ HTTPステータスを適切に使い、常に200でエラーを包まない。
 - `POST /game/recruiting/close`
 - `POST /game/prepare`
 - `POST /game/activate`
-- `POST /game/pause`
-- `POST /game/resume`
+- `POST /game/pause`（将来候補）
+- `POST /game/resume`（将来候補）
 - `POST /game/abort`
 - `POST /game/rescue`
 - `GET /game/current`
@@ -161,7 +182,7 @@ HTTPステータスを適切に使い、常に200でエラーを包まない。
 - `POST /maps/{mapId}/setup/start`
 - `POST /maps/{mapId}/enable`
 - `POST /maps/{mapId}/disable`
-- `POST /maps/{mapId}/select-next`
+- `POST /maps/{mapId}/select-next`（自動選択を採用する場合の将来候補）
 - `DELETE /maps/{mapId}`
 
 ### セットアップ

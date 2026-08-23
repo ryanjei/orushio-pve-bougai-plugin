@@ -83,14 +83,14 @@
 
 ### 実装
 
-- ロビー参加ブロック、管理画面参加操作
-- Player Snapshot
+- 管理画面Participant選択（参加ブロック/Zoneは将来候補）
+- ゲーム開始時Inventory初期化、終了時ゲーム中Inventory削除
 - PREPARING/ACTIVE/CLEAR/RECOVERING
 - ファーム安全化、初期装備、資源再生成、ショップ
 - 敵ゾーン、人数補正、所有敵
-- 通常コア2個、最終ゲート、最終コア
+- 設定された必要通常Core数、最終ゲート、最終Core
 - Boss Bar、Title、Action Bar
-- 死亡復帰、チェックポイント、再接続
+- Inventory維持での死亡復帰、再接続（Checkpointは将来候補）
 - クリア・中止の共通Recovery
 
 ### 対象外
