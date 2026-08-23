@@ -22,6 +22,10 @@ public interface GameApplicationService {
     default boolean expireIfNeeded(Instant now){return false;}
     default void playerConnected(UUID playerId,String name){}
     default void playerDisconnected(UUID playerId){}
+    default boolean playerDied(UUID playerId,String worldName){return false;}
+    default boolean playerRespawned(UUID playerId){return false;}
+    default OperationResult completeGame(UUID sessionId){throw new UnsupportedOperationException();}
+    default OperationResult recoverClearGame(UUID sessionId){throw new UnsupportedOperationException();}
     default int participantLimit(){return ParticipantPolicy.standard().maxParticipants();}
     default GameRuntimeView runtimeView(){return GameRuntimeView.idle();}
 }

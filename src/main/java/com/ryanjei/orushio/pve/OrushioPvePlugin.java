@@ -90,11 +90,12 @@ public final class OrushioPvePlugin extends JavaPlugin {
             PaperPveEnemyGateway pveGateway=new PaperPveEnemyGateway(this,gameThread,()->gamesReference.get().current(),runtimeStep,pveRandomSource);
             PveLifecycleStep pveStep=new PveLifecycleStep(new YamlPveSettingsRepository(mapsRoot),runtimeStep,pveGateway,pveRandomSource,audit);
             Random coreRandom=new Random();PaperCoreGateway coreGateway=new PaperCoreGateway(this,gameThread,()->gamesReference.get().current(),runtimeStep);
-            CoreProgressListener coreProgress=new CoreProgressListener(){public void normalCoreDestroyed(UUID sessionId,int destroyed,int required){economyStep.unlockTiersForCoreProgress(sessionId,destroyed);}};
+            CoreProgressListener coreProgress=new GameCoreProgressListener(economyStep::unlockTiersForCoreProgress,gamesReference::get,task->getServer().getScheduler().runTaskAsynchronously(this,task));
             CoreLifecycleStep coreStep=new CoreLifecycleStep(new YamlCoreSettingsRepository(mapsRoot),runtimeStep,coreGateway,coreRandom::nextInt,coreProgress,audit);
+            ClearPresentationLifecycleStep clearPresentation=new ClearPresentationLifecycleStep(new PaperClearPresentationGateway(gameThread));
             DefaultGameApplicationService games = createGames(
                     data, startup, mapSetupConsistency.session(), serverAdministration, mapProfiles, mapsRoot, audit,
-                    List.of(inventoryStep, runtimeStep, economyStep, pveStep,coreStep));
+                    List.of(inventoryStep, runtimeStep, economyStep, pveStep,coreStep,clearPresentation));
             gamesReference.set(games);
             MapAdministrationService maps = new DefaultMapAdministrationService(
                     mapsRoot, mapProfiles,
@@ -105,7 +106,7 @@ public final class OrushioPvePlugin extends JavaPlugin {
                 participantConnections = new ParticipantConnectionDispatcher(games, failure ->
                         getLogger().log(Level.SEVERE,
                                 "ゲーム参加者の接続状態を保存できませんでした。管理画面の診断情報を確認してください。"));
-                getServer().getPluginManager().registerEvents(new GameLifecycleListener(participantConnections), this);
+                getServer().getPluginManager().registerEvents(new GameLifecycleListener(participantConnections,games,this), this);
                 getServer().getPluginManager().registerEvents(new FarmEconomyListener(games,economyStep),this);
                 getServer().getPluginManager().registerEvents(new PveEnemyListener(games,pveStep,pveGateway,new PaperProjectileOwnershipGateway(this,gameThread)),this);
                 getServer().getPluginManager().registerEvents(new CoreListener(games,coreStep,coreGateway),this);
