@@ -12,11 +12,14 @@
 | map-profile | 永続 | mapIdと登録地点・範囲 |
 | map-template | 永続 | 原本ワールド |
 | active-session | ゲーム中 | 状態、runId、参加者、進捗 |
+| pending-player-cleanup | cleanup完了まで | offline ParticipantのplayerUuidと終了元sessionIdによるcleanup ownership証跡 |
 | pending-operation | 完了まで | コピー、削除、ZIP取込 |
 | game-result | 永続/保持上限あり | 履歴 |
 | audit-log | ローテーション | 管理操作・警告・エラー |
 
 すべての設定文書に`schemaVersion`を持たせる。未知の新しいschemaVersionは上書きせず、読込みを停止して診断表示する。
+
+`pending-player-cleanup.yml`はschemaVersion 1とし、論理的に一意な`(playerUuid, sessionId)`だけをAtomic保存する。Inventory内容は保存しない。Inventory削除はこのsessionId付き証跡を正本とし、`active-session.pendingCleanup`にUUIDだけがある旧データからsessionIdを推測・自動migrationしない。証跡がない旧pendingはInventoryを変更せず、確認が必要な状態として維持する。active-session schemaVersion 1は変更しない。
 
 ## 2. 主なモデル
 

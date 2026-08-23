@@ -69,6 +69,10 @@
 - 再接続者だけを同じGameSessionへ復帰させ、全員offlineでも即時中止しない。
 - クリアと中止の両方でロビーへ戻し、ゲーム中Inventoryを全削除する。
 - オフライン終了者は次回ログイン時にロビーへ戻し、ゲーム中Inventoryを削除してpending cleanupを解除する。
+- pending cleanupはplayerUuidと終了元sessionIdのAtomic ownership証跡を必須とし、同一組を重複保存しない。
+- sessionId証跡のない旧pendingや、新しいGameSessionのParticipantには古いcleanupを適用しない。
+- Inventory prepare失敗時は同じsessionIdで今回変更したonline Participantだけを短命なメモリ内証跡からrollbackする。通常終了時のSnapshot復元には使用しない。
+- Farm判定はMapProfileのfarmRegion/farmSpawnとRuntime Worldを照合し、別Map・別Runtime Worldを混同しない。
 - 終了時に同じsessionIdの生成物だけを削除する。
 
 ## 6. Phase 5受入（妨害・管理運用完成）

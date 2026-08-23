@@ -71,8 +71,14 @@ public final class OrushioPvePlugin extends JavaPlugin {
             PaperMapWorldGateway mapWorlds = new PaperMapWorldGateway(this, gameThread);
             GameRuntimeLifecycleStep runtimeStep = new GameRuntimeLifecycleStep(
                     mapProfiles, temporaryWorlds, new PaperGameRuntimeGateway(gameThread), audit);
+            PendingPlayerCleanupRepository pendingPlayerCleanup = new YamlPendingPlayerCleanupRepository(
+                    data.resolve("pending-player-cleanup.yml"));
+            pendingPlayerCleanup.findAll();
+            PlayerInventoryLifecycleStep inventoryStep = new PlayerInventoryLifecycleStep(
+                    new PaperPlayerInventoryGateway(gameThread), pendingPlayerCleanup, audit);
             DefaultGameApplicationService games = createGames(
-                    data, startup, mapSetupConsistency.session(), serverAdministration, mapProfiles, mapsRoot, audit, List.of(runtimeStep));
+                    data, startup, mapSetupConsistency.session(), serverAdministration, mapProfiles, mapsRoot, audit,
+                    List.of(inventoryStep, runtimeStep));
             MapAdministrationService maps = new DefaultMapAdministrationService(
                     mapsRoot, mapProfiles,
                     new SafeWorldZipImporter(mapsRoot, SafeWorldZipImporter.Limits.defaults()),
