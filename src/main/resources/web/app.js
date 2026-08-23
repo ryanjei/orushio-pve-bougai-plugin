@@ -26,6 +26,8 @@ function renderLifecycle(value) {
   $('lifecycle-state').textContent = `${value.stateLabel} / 参加者 ${value.participantCount}人${value.remainingSeconds > 0 ? ` / 残り ${Math.ceil(value.remainingSeconds / 60)}分` : ''}`;
   const runtime=value.runtime||{};
   $('runtime-status').innerHTML=`<strong>ゲームワールド:</strong> ${escapeHtml(runtime.worldState||'未準備')}　<strong>マップ:</strong> ${escapeHtml(runtime.mapState||'未準備')}　<strong>転送:</strong> ${escapeHtml(runtime.transferState||'未実行')}${runtime.error?`<br><span class="error">${escapeHtml(runtime.error)}</span>`:''}`;
+  const progress=value.progression||{},checkpointPlayers=(progress.participants||[]).filter(player=>player.checkpointActive).map(player=>escapeHtml(player.name)).join('、')||'なし';
+  $('progression-status').innerHTML=`<strong>通常Core:</strong> ${Number(progress.destroyedNormalCores||0)} / ${Number(progress.requiredNormalCores||value.requiredNormalCores||0)}　<strong>最終エリア:</strong> ${progress.finalAreaUnlocked?'解放済み':'ロック'}　<strong>Final Core:</strong> ${progress.finalCoreDestroyed?'破壊済み':'未破壊'}<br><strong>Checkpoint取得:</strong> ${checkpointPlayers}`;
   $('game-participant-heading').textContent = `ゲーム参加者（1～${value.participantLimit}人）`;
   const selected = new Set(value.participants.map(player => player.uuid));
   const participantRows = value.participants.map(player => `<li><span>${escapeHtml(player.name)}<small>参加者に選択済み / ${player.connected ? 'オンライン' : 'オフライン（参加登録は維持）'}</small></span><button data-game-participant="${escapeHtml(player.uuid)}" data-selected="true" class="danger">参加から外す</button></li>`);

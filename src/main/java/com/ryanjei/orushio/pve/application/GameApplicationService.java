@@ -28,4 +28,5 @@ public interface GameApplicationService {
     default OperationResult recoverClearGame(UUID sessionId){throw new UnsupportedOperationException();}
     default int participantLimit(){return ParticipantPolicy.standard().maxParticipants();}
     default GameRuntimeView runtimeView(){return GameRuntimeView.idle();}
+    default com.ryanjei.orushio.pve.progression.FinalAreaProgressionView progressionView(){return com.ryanjei.orushio.pve.progression.FinalAreaProgressionView.idle();}
 }

@@ -16,6 +16,8 @@ public interface GameLifecycleStep{
     default void participantConnectionCommitted(GameSession session,UUID playerId){}
     default void participantDisconnected(GameSession session,UUID playerId){}
     default void participantRespawned(GameSession session,UUID playerId){}
+    /** Returns true when this step selected and applied the session-owned respawn destination. */
+    default boolean participantRespawnedHandled(GameSession session,UUID playerId){return false;}
     /** Non-critical presentation hook. Cleanup must continue if this hook fails. */
     default void clearStarted(GameSession session){}
     default boolean ownsRuntime(GameSession session,String worldName){return false;}
@@ -25,4 +27,5 @@ public interface GameLifecycleStep{
     default Set<UUID> completedCleanupPlayers(GameSession session){return Set.of();}
     default boolean hasPendingCleanup(UUID playerId){return false;}
     default GameRuntimeView runtimeView(){return GameRuntimeView.idle();}
+    default com.ryanjei.orushio.pve.progression.FinalAreaProgressionView progressionView(){return com.ryanjei.orushio.pve.progression.FinalAreaProgressionView.idle();}
 }

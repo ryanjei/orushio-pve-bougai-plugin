@@ -15,6 +15,7 @@ import com.ryanjei.orushio.pve.map.*;
 import com.ryanjei.orushio.pve.paper.*;
 import com.ryanjei.orushio.pve.persistence.*;
 import com.ryanjei.orushio.pve.pve.*;
+import com.ryanjei.orushio.pve.progression.*;
 import com.ryanjei.orushio.pve.security.AuthService;
 import com.ryanjei.orushio.pve.security.LauncherShutdownToken;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -92,12 +93,13 @@ public final class OrushioPvePlugin extends JavaPlugin {
             PaperPveEnemyGateway pveGateway=new PaperPveEnemyGateway(this,gameThread,()->gamesReference.get().current(),runtimeStep,pveRandomSource);
             PveLifecycleStep pveStep=new PveLifecycleStep(new YamlPveSettingsRepository(mapsRoot),runtimeStep,pveGateway,pveRandomSource,audit);
             Random coreRandom=new Random();PaperCoreGateway coreGateway=new PaperCoreGateway(this,gameThread,()->gamesReference.get().current(),runtimeStep);
-            CoreProgressListener coreProgress=new GameCoreProgressListener(economyStep::unlockTiersForCoreProgress,gamesReference::get,task->getServer().getScheduler().runTaskAsynchronously(this,task));
+            FinalAreaProgressionStep finalAreaStep=new FinalAreaProgressionStep(runtimeStep,new PaperFinalAreaGateway(gameThread,runtimeStep),audit);
+            CoreProgressListener coreProgress=new GameCoreProgressListener((sessionId,destroyed)->{economyStep.unlockTiersForCoreProgress(sessionId,destroyed);finalAreaStep.normalCoreDestroyed(sessionId,destroyed);},gamesReference::get,task->getServer().getScheduler().runTaskAsynchronously(this,task),finalAreaStep::finalCoreDestroyed);
             CoreLifecycleStep coreStep=new CoreLifecycleStep(new YamlCoreSettingsRepository(mapsRoot),runtimeStep,coreGateway,coreRandom::nextInt,coreProgress,audit);
             ClearPresentationLifecycleStep clearPresentation=new ClearPresentationLifecycleStep(new PaperClearPresentationGateway(gameThread));
             DefaultGameApplicationService games = createGames(
                     data, startup, mapSetupConsistency.session(), serverAdministration, mapProfiles, mapsRoot, audit,
-                    List.of(inventoryStep, runtimeStep, economyStep, pveStep,coreStep,clearPresentation));
+                    List.of(inventoryStep, runtimeStep, economyStep, pveStep,finalAreaStep,coreStep,clearPresentation));
             gamesReference.set(games);
             Random interferenceRandom=new Random();
             InterferenceApplicationService interference=new InterferenceApplicationService(games::current,runtimeStep,new PaperInterferenceGateway(gameThread,games::current,interferenceRandom::nextInt),InterferenceSettings.defaults(),audit);
@@ -115,6 +117,7 @@ public final class OrushioPvePlugin extends JavaPlugin {
                 getServer().getPluginManager().registerEvents(new FarmEconomyListener(games,economyStep),this);
                 getServer().getPluginManager().registerEvents(new PveEnemyListener(games,pveStep,pveGateway,new PaperProjectileOwnershipGateway(this,gameThread)),this);
                 getServer().getPluginManager().registerEvents(new CoreListener(games,coreStep,coreGateway),this);
+                getServer().getPluginManager().registerEvents(new FinalAreaListener(games,finalAreaStep),this);
                 lifecycleTimer = getServer().getScheduler().runTaskTimerAsynchronously(this,
                         () -> expireGameSafely(games), 20L, 20L);
                 economyTimer=getServer().getScheduler().runTaskTimer(this,()->economyStep.tick(games.current(),Instant.now()),20L,20L);
