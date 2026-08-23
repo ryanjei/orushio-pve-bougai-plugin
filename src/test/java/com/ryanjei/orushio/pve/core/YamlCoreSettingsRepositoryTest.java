@@ -1,0 +1,7 @@
+package com.ryanjei.orushio.pve.core;
+import com.ryanjei.orushio.pve.persistence.RepositoryException;import org.junit.jupiter.api.*;import org.junit.jupiter.api.io.TempDir;import java.nio.file.*;import static org.junit.jupiter.api.Assertions.*;
+class YamlCoreSettingsRepositoryTest{
+ @TempDir Path root;
+ @Test void schema1をAtomic保存して読める(){var repository=new YamlCoreSettingsRepository(root);repository.save("map-a",new CoreSettings(100,250));assertEquals(new CoreSettings(100,250),repository.load("map-a"));assertTrue(Files.exists(root.resolve("map-a/core-settings.yml")));repository.save("map-a",new CoreSettings(120,300));assertTrue(Files.exists(root.resolve("map-a/core-settings.yml.bak")));}
+ @Test void unknownSchema欠落未知項目と不正HPを拒否する()throws Exception{Path file=root.resolve("map-a/core-settings.yml");Files.createDirectories(file.getParent());Files.writeString(file,"schemaVersion: 99\nnormalCoreHp: 10\nfinalCoreHp: 20\n");var repository=new YamlCoreSettingsRepository(root);assertThrows(RepositoryException.class,()->repository.load("map-a"));Files.writeString(file,"schemaVersion: 1\nnormalCoreHp: 10\n");assertThrows(RepositoryException.class,()->repository.load("map-a"));Files.writeString(file,"schemaVersion: 1\nnormalCoreHp: NaN\nfinalCoreHp: 20\n");assertThrows(RepositoryException.class,()->repository.load("map-a"));Files.writeString(file,"schemaVersion: 1\nnormalCoreHp: 10\nfinalCoreHp: 20\nextra: x\n");assertThrows(RepositoryException.class,()->repository.load("map-a"));}
+}

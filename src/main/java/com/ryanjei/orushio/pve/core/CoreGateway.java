@@ -1,0 +1,3 @@
+package com.ryanjei.orushio.pve.core;
+import com.ryanjei.orushio.pve.domain.Participant;import com.ryanjei.orushio.pve.map.Cuboid;import java.util.*;
+public interface CoreGateway{void spawn(CoreSpawnRequest request);Optional<CoreOwnership> ownership(UUID entityId);void removeCore(UUID sessionId,UUID coreId,String world);void openGates(UUID sessionId,String world,List<Cuboid> gates);void updateUi(UUID sessionId,String world,List<Participant>participants,CoreProgressView progress);void removeUi(UUID sessionId,UUID playerId);void cleanupOwned(UUID sessionId,String world);void clearUi(UUID sessionId);}

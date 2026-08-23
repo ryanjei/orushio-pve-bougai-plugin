@@ -5,6 +5,7 @@ import com.ryanjei.orushio.pve.bootstrap.BootstrapHandoff;
 import com.ryanjei.orushio.pve.bootstrap.LauncherShutdownHandoff;
 import com.ryanjei.orushio.pve.bootstrap.RuntimeConfiguration;
 import com.ryanjei.orushio.pve.bootstrap.StartupState;
+import com.ryanjei.orushio.pve.core.*;
 import com.ryanjei.orushio.pve.domain.GameSession;
 import com.ryanjei.orushio.pve.economy.*;
 import com.ryanjei.orushio.pve.http.AdminHttpServer;
@@ -88,9 +89,12 @@ public final class OrushioPvePlugin extends JavaPlugin {
             Random pveRandom=new Random();RandomSource pveRandomSource=pveRandom::nextInt;
             PaperPveEnemyGateway pveGateway=new PaperPveEnemyGateway(this,gameThread,()->gamesReference.get().current(),runtimeStep,pveRandomSource);
             PveLifecycleStep pveStep=new PveLifecycleStep(new YamlPveSettingsRepository(mapsRoot),runtimeStep,pveGateway,pveRandomSource,audit);
+            Random coreRandom=new Random();PaperCoreGateway coreGateway=new PaperCoreGateway(this,gameThread,()->gamesReference.get().current(),runtimeStep);
+            CoreProgressListener coreProgress=new CoreProgressListener(){public void normalCoreDestroyed(UUID sessionId,int destroyed,int required){economyStep.unlockTiersForCoreProgress(sessionId,destroyed);}};
+            CoreLifecycleStep coreStep=new CoreLifecycleStep(new YamlCoreSettingsRepository(mapsRoot),runtimeStep,coreGateway,coreRandom::nextInt,coreProgress,audit);
             DefaultGameApplicationService games = createGames(
                     data, startup, mapSetupConsistency.session(), serverAdministration, mapProfiles, mapsRoot, audit,
-                    List.of(inventoryStep, runtimeStep, economyStep, pveStep));
+                    List.of(inventoryStep, runtimeStep, economyStep, pveStep,coreStep));
             gamesReference.set(games);
             MapAdministrationService maps = new DefaultMapAdministrationService(
                     mapsRoot, mapProfiles,
@@ -104,6 +108,7 @@ public final class OrushioPvePlugin extends JavaPlugin {
                 getServer().getPluginManager().registerEvents(new GameLifecycleListener(participantConnections), this);
                 getServer().getPluginManager().registerEvents(new FarmEconomyListener(games,economyStep),this);
                 getServer().getPluginManager().registerEvents(new PveEnemyListener(games,pveStep,pveGateway,new PaperProjectileOwnershipGateway(this,gameThread)),this);
+                getServer().getPluginManager().registerEvents(new CoreListener(games,coreStep,coreGateway),this);
                 lifecycleTimer = getServer().getScheduler().runTaskTimerAsynchronously(this,
                         () -> expireGameSafely(games), 20L, 20L);
                 economyTimer=getServer().getScheduler().runTaskTimer(this,()->economyStep.tick(games.current(),Instant.now()),20L,20L);

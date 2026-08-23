@@ -1,0 +1,8 @@
+package com.ryanjei.orushio.pve.paper;
+import com.ryanjei.orushio.pve.application.GameApplicationService;import com.ryanjei.orushio.pve.core.*;import org.bukkit.attribute.Attribute;import org.bukkit.entity.Player;import org.bukkit.event.*;import org.bukkit.event.entity.*;import org.bukkit.event.player.PlayerQuitEvent;
+public final class CoreListener implements Listener{
+ private final GameApplicationService games;private final CoreLifecycleStep cores;private final CoreGateway gateway;public CoreListener(GameApplicationService games,CoreLifecycleStep cores,CoreGateway gateway){this.games=games;this.cores=cores;this.gateway=gateway;}
+ @EventHandler(ignoreCancelled=true,priority=EventPriority.HIGHEST)public void damage(EntityDamageByEntityEvent event){gateway.ownership(event.getEntity().getUniqueId()).filter(o->o.role()==CoreEntityRole.HITBOX).ifPresent(owner->{event.setCancelled(true);if(!(event.getDamager() instanceof Player player))return;var attribute=player.getAttribute(Attribute.ATTACK_DAMAGE);double damage=attribute==null?0:attribute.getValue();cores.damage(games.current(),player.getUniqueId(),player.getWorld().getName(),owner,damage,player.getAttackCooldown()>=0.9f);});}
+ @EventHandler(ignoreCancelled=true,priority=EventPriority.HIGHEST)public void environment(EntityDamageEvent event){if(event instanceof EntityDamageByEntityEvent)return;gateway.ownership(event.getEntity().getUniqueId()).filter(o->o.role()==CoreEntityRole.HITBOX).ifPresent(owner->event.setCancelled(true));}
+ @EventHandler public void quit(PlayerQuitEvent event){var current=games.current();if(current.isParticipant(event.getPlayer().getUniqueId()))gateway.removeUi(current.sessionId(),event.getPlayer().getUniqueId());}
+}
