@@ -94,6 +94,7 @@ public final class TemporaryWorldManager {
     public synchronized void requireRecovery(OwnedWorld world,String reason) { recoveryTarget=Objects.requireNonNull(world); startupRecoveryFailure=new MapIoException("WORLD_RECOVERY",reason); }
     public synchronized void requireRecovery(String reason) { recoveryTarget=null; startupRecoveryFailure=new MapIoException("WORLD_RECOVERY",reason); }
     public synchronized boolean recoveryRequired() { return startupRecoveryFailure!=null; }
+    public synchronized void clearRecovery(){startupRecoveryFailure=null;recoveryTarget=null;}
     public synchronized Optional<OwnedWorld> recoveryTarget() { return Optional.ofNullable(recoveryTarget); }
     public synchronized Optional<OwnedWorld> findRunWorld(String sessionId,MapProfileId mapId) {
         List<OwnedWorld> sameSession=ownedWorlds().stream().filter(world->world.purpose().equals("run")&&world.sessionId().equals(sessionId)).toList();
@@ -114,6 +115,7 @@ public final class TemporaryWorldManager {
 
     private Optional<OwnedWorld> readOwned(Path dir) {
         try {
+            if(Files.isSymbolicLink(dir))return Optional.empty();
             Path marker=dir.resolve(MARKER); if(!Files.isRegularFile(marker,LinkOption.NOFOLLOW_LINKS)||Files.isSymbolicLink(marker)) return Optional.empty();
             Map<String,String> values=new HashMap<>(); for(String line:Files.readAllLines(marker)){int i=line.indexOf('=');if(i>0)values.put(line.substring(0,i),line.substring(i+1));}
             String purpose=values.get("purpose"),ownership=values.get("ownershipId"),mapId=values.get("mapId");

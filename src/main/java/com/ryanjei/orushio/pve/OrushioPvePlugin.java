@@ -36,6 +36,7 @@ public final class OrushioPvePlugin extends JavaPlugin {
     private BukkitTask economyTimer;
     private BukkitTask pveTimer;
     private ParticipantConnectionDispatcher participantConnections;
+    private MapAdministrationService mapAdministration;
 
     @Override
     public void onEnable() {
@@ -101,6 +102,7 @@ public final class OrushioPvePlugin extends JavaPlugin {
                     mapsRoot, mapProfiles,
                     new SafeWorldZipImporter(mapsRoot, SafeWorldZipImporter.Limits.defaults()),
                     temporaryWorlds, mapWorlds, games, new MapSelectionService(new Random()), audit);
+            mapAdministration=maps;
             getServer().getPluginManager().registerEvents(new MapSetupListener(maps, mapWorlds), this);
             if (!startup.diagnosticMode()) {
                 participantConnections = new ParticipantConnectionDispatcher(games, failure ->
@@ -195,7 +197,7 @@ public final class OrushioPvePlugin extends JavaPlugin {
                 ? startup.configuration().warnings() : startup.warnings());
         if (!audit.healthy()) warnings.add("監査ログへ書き込めません。");
         temporaryWorlds.startupRecoveryWarning().ifPresent(warnings::add);
-        if (!mapSetupConsistency.warning().isBlank() && warnings.stream().noneMatch(mapSetupConsistency.warning()::equals))
+        if (temporaryWorlds.recoveryRequired()&&!mapSetupConsistency.warning().isBlank() && warnings.stream().noneMatch(mapSetupConsistency.warning()::equals))
             warnings.add(mapSetupConsistency.warning());
         if (gameRecoveryRequired) warnings.add("ゲーム準備または清掃が完了していません。復旧清掃を再試行してください。");
         Map<String, Object> result = new LinkedHashMap<>();
@@ -236,6 +238,11 @@ public final class OrushioPvePlugin extends JavaPlugin {
             participantConnections.close();
             participantConnections = null;
         }
+        if (http != null) {
+            http.close();
+            http = null;
+        }
+        if(mapAdministration!=null){try{mapAdministration.shutdownMapSetupSafely();}catch(RuntimeException failure){getLogger().log(Level.SEVERE,"進行中Map Setupの安全な破棄に失敗しました。次回起動後に手動復旧してください。",failure);}mapAdministration=null;}
         if (bootstrapHandoff != null) {
             try { bootstrapHandoff.clear(); } catch (Exception ignored) { }
             bootstrapHandoff = null;
@@ -243,10 +250,6 @@ public final class OrushioPvePlugin extends JavaPlugin {
         if (shutdownHandoff != null) {
             try { shutdownHandoff.clear(); } catch (Exception ignored) { }
             shutdownHandoff = null;
-        }
-        if (http != null) {
-            http.close();
-            http = null;
         }
         if (gameThread != null) {
             gameThread.close();

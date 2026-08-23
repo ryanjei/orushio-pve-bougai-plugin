@@ -29,10 +29,14 @@ public interface MapAdministrationService {
     default void teleportSetupMarker(UUID administrator,UUID markerId){throw new UnsupportedOperationException();}
     MapProfile saveSetup(String expectedSessionId);
     void discardSetup(String expectedSessionId);
+    default void shutdownMapSetupSafely(){}
+    default SetupRecoveryView setupRecovery(){return SetupRecoveryView.none();}
+    default void discardSetupRecovery(){throw new IllegalStateException("復旧が必要なMap Setupはありません。");}
 
     record SetupEntry(BlockPoint point,Cuboid region){}
     record MarkerAreaView(String areaId,String label,int markerCount,List<SpawnMarker> markers){}
     record MarkerTypeView(SetupMarkerType markerType,String label,int markerCount,List<SetupMarker> markers){}
+    record SetupRecoveryView(boolean recoveryRequired,String mapId,String administrator,String sessionId,String worldName,boolean safeToRecover,String warning){public static SetupRecoveryView none(){return new SetupRecoveryView(false,"","","","",false,"");}}
     record SetupView(boolean active,String mapId,String displayName,String administrator,String selectedField,boolean area,List<String> missing,Map<String,Integer> counts,Map<String,List<SetupEntry>> entries,List<MarkerAreaView> markerAreas,List<MarkerTypeView> setupMarkerTypes,long revision){
         public SetupView(boolean active,String mapId,String displayName,String administrator,String selectedField,boolean area,List<String> missing,Map<String,Integer>counts,Map<String,List<SetupEntry>>entries){this(active,mapId,displayName,administrator,selectedField,area,missing,counts,entries,List.of(),List.of(),0);}
         public SetupView(boolean active,String mapId,String administrator,String selectedField,boolean area,List<String> missing){this(active,mapId,mapId,administrator,selectedField,area,missing,Map.of(),Map.of(),List.of(),List.of(),0);}
