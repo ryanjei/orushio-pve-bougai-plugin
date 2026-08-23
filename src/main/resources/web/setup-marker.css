@@ -1,0 +1,3 @@
+#event-marker-summary,#event-marker-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#event-marker-summary .setup-entry,#event-marker-list .setup-entry{height:100%}
+@media(max-width:800px){#event-marker-summary,#event-marker-list{grid-template-columns:1fr}}

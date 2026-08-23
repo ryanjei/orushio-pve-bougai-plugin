@@ -42,9 +42,9 @@ class SetupFieldEntryHttpServerTest {
     @AfterEach void stop(){server.close();}
 
     @Test void entry変更対象を認証済みPUTで選択する() throws Exception {
-        String body="{\"administrator\":\""+maps.administrator+"\",\"field\":\"shopPoints\",\"area\":false,\"index\":2}";
+        String body="{\"administrator\":\""+maps.administrator+"\",\"field\":\"resourceZones\",\"area\":true,\"index\":2}";
         HttpResponse<String> response=client.send(HttpRequest.newBuilder(URI.create(base+"/api/v1/maps/setup/field-entry")).header("Cookie",cookie).header("Origin",base).header("X-CSRF-Token",csrf).PUT(HttpRequest.BodyPublishers.ofString(body)).build(),HttpResponse.BodyHandlers.ofString());
-        assertEquals(200,response.statusCode());assertEquals("shopPoints",maps.field);assertEquals(2,maps.index);assertTrue(auditCodes.contains("MAP_SETUP_ENTRY_EDIT_SELECTED"));
+        assertEquals(200,response.statusCode());assertEquals("resourceZones",maps.field);assertEquals(2,maps.index);assertTrue(auditCodes.contains("MAP_SETUP_ENTRY_EDIT_SELECTED"));
     }
 
     @Test void 認証失敗では成功auditを記録しない() throws Exception {String body="{\"administrator\":\""+maps.administrator+"\",\"field\":\"shopPoints\",\"area\":false,\"index\":2}";HttpResponse<String> response=client.send(HttpRequest.newBuilder(URI.create(base+"/api/v1/maps/setup/field-entry")).header("Origin",base).header("X-CSRF-Token",csrf).PUT(HttpRequest.BodyPublishers.ofString(body)).build(),HttpResponse.BodyHandlers.ofString());assertEquals(401,response.statusCode());assertFalse(auditCodes.contains("MAP_SETUP_ENTRY_EDIT_SELECTED"));}

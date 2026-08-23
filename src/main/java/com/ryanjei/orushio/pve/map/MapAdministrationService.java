@@ -26,6 +26,7 @@ public interface MapAdministrationService {
     default boolean ownsSetupWorld(UUID administrator,String worldName){return false;}
     default void setSetupMarkerEnabled(UUID administrator,UUID markerId,boolean enabled){throw new UnsupportedOperationException();}
     default void removeSetupMarker(UUID administrator,UUID markerId){throw new UnsupportedOperationException();}
+    default boolean removeSetupMarkerAt(UUID administrator,BlockPoint position){return false;}
     default void teleportSetupMarker(UUID administrator,UUID markerId){throw new UnsupportedOperationException();}
     MapProfile saveSetup(String expectedSessionId);
     void discardSetup(String expectedSessionId);
