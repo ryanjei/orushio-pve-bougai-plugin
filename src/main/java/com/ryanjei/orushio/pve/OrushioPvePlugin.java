@@ -9,6 +9,7 @@ import com.ryanjei.orushio.pve.core.*;
 import com.ryanjei.orushio.pve.domain.GameSession;
 import com.ryanjei.orushio.pve.economy.*;
 import com.ryanjei.orushio.pve.http.AdminHttpServer;
+import com.ryanjei.orushio.pve.interference.*;
 import com.ryanjei.orushio.pve.logging.AuditLog;
 import com.ryanjei.orushio.pve.map.*;
 import com.ryanjei.orushio.pve.paper.*;
@@ -98,6 +99,8 @@ public final class OrushioPvePlugin extends JavaPlugin {
                     data, startup, mapSetupConsistency.session(), serverAdministration, mapProfiles, mapsRoot, audit,
                     List.of(inventoryStep, runtimeStep, economyStep, pveStep,coreStep,clearPresentation));
             gamesReference.set(games);
+            Random interferenceRandom=new Random();
+            InterferenceApplicationService interference=new InterferenceApplicationService(games::current,runtimeStep,new PaperInterferenceGateway(gameThread,games::current,interferenceRandom::nextInt),InterferenceSettings.defaults(),audit);
             MapAdministrationService maps = new DefaultMapAdministrationService(
                     mapsRoot, mapProfiles,
                     new SafeWorldZipImporter(mapsRoot, SafeWorldZipImporter.Limits.defaults()),
@@ -129,7 +132,7 @@ public final class OrushioPvePlugin extends JavaPlugin {
                     () -> diagnostics(startup, mapSetupConsistency, audit, bound[0], data, games, temporaryWorlds),
                     audit, ()->startup.diagnosticMode()||temporaryWorlds.recoveryRequired(),
                     ()->games.current().state()==com.ryanjei.orushio.pve.domain.GameState.RECOVERING,
-                    shutdownToken, shutdownController::request);
+                    shutdownToken, shutdownController::request,interference);
             http.start();
             bound[0] = true;
             bootstrapHandoff.publish(config.port(), http.issueBootstrapToken());

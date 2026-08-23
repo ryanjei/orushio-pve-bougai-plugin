@@ -1,0 +1,23 @@
+package com.ryanjei.orushio.pve.interference;
+
+import static org.junit.jupiter.api.Assertions.*;
+import com.ryanjei.orushio.pve.domain.*;
+import com.ryanjei.orushio.pve.logging.AuditSink;
+import com.ryanjei.orushio.pve.map.*;
+import java.time.*;
+import java.util.*;
+import org.junit.jupiter.api.*;
+
+class InterferenceApplicationServiceTest {
+    UUID sessionId=UUID.randomUUID(),alice=UUID.randomUUID(),bob=UUID.randomUUID();Instant now=Instant.parse("2026-08-24T00:00:00Z");GameSession session;FakeGateway gateway;List<String>audits;InterferenceApplicationService service;
+    @BeforeEach void setup(){session=active(sessionId);gateway=new FakeGateway();audits=new ArrayList<>();MapProfile profile=new MapProfile(new MapProfileId("map-a"),"A",false,"template",Map.of(),Map.of("finalRegion",List.of(new Cuboid(0,60,0,10,80,10))),now);GameRuntimeContext context=new GameRuntimeContext(sessionId,"runtime-a",RuntimeMap.resolve(profile));service=new InterferenceApplicationService(()->session,id->id.equals(sessionId)?Optional.of(context):Optional.empty(),gateway,InterferenceSettings.defaults(),new AuditSink(){public void record(String a,String b,String code,String d){audits.add(code+":"+d);}public boolean healthy(){return true;}});}
+    @Test void ACTIVEのCurrentSessionで対象Participantへ三種類を発動する(){for(InterferenceType type:InterferenceType.values()){gateway.result=new InterferenceGateway.ExecutionResult(1,1);InterferenceResult result=service.trigger(sessionId,type,now);assertTrue(result.accepted());assertEquals(type,result.requestedType());assertEquals(1,result.affectedPlayerCount());assertEquals(1,result.skippedPlayerCount());assertTrue(audits.stream().anyMatch(value->value.startsWith("INTERFERENCE_"+type+"_TRIGGERED")));now=now.plusSeconds(3);}}
+    @Test void ACTIVE以外と旧SessionとRuntime未準備を拒否する(){session=GameSession.idle();assertEquals(InterferenceApplicationService.NOT_ACTIVE,service.trigger(session.sessionId(),InterferenceType.DARKNESS,now).rejectedReason());session=active(sessionId);assertEquals(InterferenceApplicationService.SESSION_MISMATCH,service.trigger(UUID.randomUUID(),InterferenceType.DARKNESS,now).rejectedReason());InterferenceApplicationService missing=new InterferenceApplicationService(()->session,id->Optional.empty(),gateway,InterferenceSettings.defaults(),new NoAudit());assertEquals(InterferenceApplicationService.RUNTIME_UNAVAILABLE,missing.trigger(sessionId,InterferenceType.DARKNESS,now).rejectedReason());}
+    @Test void Offline別WorldFinalRegion外をGatewayのskipとして対象なし拒否する(){gateway.result=new InterferenceGateway.ExecutionResult(0,2);InterferenceResult result=service.trigger(sessionId,InterferenceType.LEVITATION,now);assertEquals(InterferenceApplicationService.NO_TARGET,result.rejectedReason());assertEquals(2,result.skippedPlayerCount());assertTrue(audits.stream().anyMatch(value->value.startsWith("INTERFERENCE_REJECTED")));}
+    @Test void 同一TypeはCooldown拒否し時間経過後に再発動でき別Typeは独立する(){assertTrue(service.trigger(sessionId,InterferenceType.DARKNESS,now).accepted());assertEquals(InterferenceApplicationService.COOLDOWN,service.trigger(sessionId,InterferenceType.DARKNESS,now.plusSeconds(1)).rejectedReason());assertTrue(service.trigger(sessionId,InterferenceType.LEVITATION,now.plusSeconds(1)).accepted());assertTrue(service.trigger(sessionId,InterferenceType.DARKNESS,now.plusSeconds(2)).accepted());assertEquals(3,gateway.calls);}
+    @Test void Game終了後は発動せずGatewayを呼ばない(){session=active(sessionId);assertTrue(service.trigger(sessionId,InterferenceType.DARKNESS,now).accepted());int calls=gateway.calls;session=GameSession.idle();assertFalse(service.trigger(session.sessionId(),InterferenceType.DARKNESS,now.plusSeconds(3)).accepted());assertEquals(calls,gateway.calls);}
+    @Test void Gateway失敗は成功扱いせず拒否Auditを残す(){gateway.fail=true;assertThrows(IllegalStateException.class,()->service.trigger(sessionId,InterferenceType.HOTBAR_SHUFFLE,now));assertTrue(audits.stream().anyMatch(value->value.equals("INTERFERENCE_REJECTED:INTERFERENCE_HOTBAR_SHUFFLE:EXECUTION_FAILED")));}
+    private GameSession active(UUID id){return new GameSession(id,GameState.ACTIVE,List.of(new Participant(alice,"A",true),new Participant(bob,"B",false)),now,"map-a",2,60,2,1,now,now.plusSeconds(60),Set.of());}
+    private static final class FakeGateway implements InterferenceGateway{ExecutionResult result=new ExecutionResult(1,1);int calls;boolean fail;public ExecutionResult apply(UUID s,String w,Cuboid r,List<UUID>p,InterferenceType t,InterferenceSettings settings){calls++;if(fail)throw new IllegalStateException("failed");return result;}}
+    private static final class NoAudit implements AuditSink{public void record(String a,String b,String c,String d){}public boolean healthy(){return true;}}
+}
