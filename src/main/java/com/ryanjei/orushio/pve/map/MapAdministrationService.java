@@ -23,6 +23,7 @@ public interface MapAdministrationService {
     default void teleportSpawnMarker(UUID administrator,UUID markerId){throw new UnsupportedOperationException();}
     default void issueSetupMarker(UUID administrator,SetupMarkerType markerType){throw new UnsupportedOperationException();}
     default void recordSetupMarker(UUID administrator,MapWorldGateway.SetupMarkerToken token,BlockPoint position){throw new UnsupportedOperationException();}
+    default boolean ownsSetupWorld(UUID administrator,String worldName){return false;}
     default void setSetupMarkerEnabled(UUID administrator,UUID markerId,boolean enabled){throw new UnsupportedOperationException();}
     default void removeSetupMarker(UUID administrator,UUID markerId){throw new UnsupportedOperationException();}
     default void teleportSetupMarker(UUID administrator,UUID markerId){throw new UnsupportedOperationException();}
