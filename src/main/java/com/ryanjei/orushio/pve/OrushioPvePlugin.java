@@ -167,7 +167,8 @@ public final class OrushioPvePlugin extends JavaPlugin {
         }
         return new DefaultGameApplicationService(
                 repository, initial, serverAdministration::onlinePlayers, maps,
-                new YamlGameLaunchSettingsRepository(mapsRoot), lifecycleSteps, audit);
+                new YamlGameLaunchSettingsRepository(mapsRoot), lifecycleSteps, audit,ParticipantPolicy.standard(),
+                new Phase4GameReadinessValidator(new YamlGameplaySettingsRepository(mapsRoot),new YamlPveSettingsRepository(mapsRoot),new YamlCoreSettingsRepository(mapsRoot),new PaperResourceMaterialValidator()));
     }
 
     private void expireGameSafely(DefaultGameApplicationService games) {
