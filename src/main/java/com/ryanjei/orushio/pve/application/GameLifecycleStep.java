@@ -14,6 +14,11 @@ public interface GameLifecycleStep{
     default void participantConnected(GameSession session,UUID playerId){}
     default void rollbackParticipantConnection(GameSession session,UUID playerId){}
     default void participantConnectionCommitted(GameSession session,UUID playerId){}
+    default void participantDisconnected(GameSession session,UUID playerId){}
+    default void participantRespawned(GameSession session,UUID playerId){}
+    /** Non-critical presentation hook. Cleanup must continue if this hook fails. */
+    default void clearStarted(GameSession session){}
+    default boolean ownsRuntime(GameSession session,String worldName){return false;}
     /** Returns true only when session-owned pending cleanup completed successfully. */
     default boolean pendingCleanupConnected(GameSession session,UUID playerId){return false;}
     default Set<UUID> pendingCleanupPlayers(GameSession session){return Set.of();}
