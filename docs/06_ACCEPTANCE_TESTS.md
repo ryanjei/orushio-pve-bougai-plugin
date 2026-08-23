@@ -59,6 +59,10 @@
 - ファーム内で敵、妨害、主要ダメージを無効化する。
 - 初期装備とブロック単位の資源再生成が動作し、取得者本人の鉱石・農業Pointだけが増える。
 - ButtonまたはInteraction等のShop操作で購入者本人のPointだけを消費し、商品を本人へ付与する。
+- Farm資源、個人Point、再生成待ち、Shop TierはsessionIdとRuntime World ownershipを検証し、Map原本・別World・別Sessionへ作用しない。
+- 資源再生成はRuntime内の待ちEntryを単一周期処理でまとめ、同一Blockの重複取得とゲーム終了後の遅延再生成を防ぐ。
+- Shop購入はPoint消費とItem付与を一連の処理として扱い、Inventory満杯または付与失敗時にPointを失わない。
+- Shopカテゴリで上位Tierが解禁された場合は同カテゴリの下位Tier商品を購入できず、異なるカテゴリのTierには影響しない。
 - 敵は指定ゾーンだけに生成し、所有タグを持つ。
 - 開始時参加人数と敵人数倍率がSessionへ固定され、Enemy個体性能ではなく出現数へ反映される。
 - Map/ゲーム設定で決定された必要通常Core数（現在の既定値2）が候補から重複なしで選ばれる。

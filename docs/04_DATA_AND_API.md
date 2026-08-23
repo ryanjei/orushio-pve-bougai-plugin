@@ -89,6 +89,18 @@ farmingPoints
 
 PointはParticipant UUIDごとの個人残高とし、GameSession全体の共有財布として保存しない。Shop購入は購入者本人の残高だけを消費する。active-sessionへ追加する場合はschemaVersion 1の安全なoptional keyとしてPhase 4.4で具体形式を定義し、旧Sessionの進行を推測復元しない。
 
+Phase 4.4ではPoint、解禁Tier、資源再生成待ちはプロセス内のGameSession Runtime状態として保持し、active-session schemaへ追加しない。再起動時は既存RECOVERING契約に従って破棄し、旧Sessionから推測復元しない。
+
+### 4.4 Map別Farm Economy設定
+
+`maps/<mapId>/gameplay-settings.yml` schemaVersion 1へ、Map別のFarm Economy設定をAtomic保存する。
+
+- `resourceZones[]`: stable `resourceZoneId`、Pointカテゴリ、Material、1ブロックのPoint値、再生成時間、Region
+- `shops[]`: stable `shopId`、地点、Shopカテゴリ、Tier別の商品
+- 商品: Pointカテゴリ、価格、Item、個数、enchantments、unbreakable
+
+stable IDに配列indexを使用しない。Runtime開始時に、設定のRegionとShop地点がMap Setup済みの`resourceZones` / `shopPoints`に一致することを検証し、不一致は開始失敗とする。Pointや再生成待ちをこのファイルへ保存しない。
+
 ## 3. 設定の適用
 
 - ゲーム開始時に使用設定をSessionへ固定する方式は後続Phaseのschema候補とする。Phase 4.2.1ではschema変更を行わない。

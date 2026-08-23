@@ -6,6 +6,7 @@ import com.ryanjei.orushio.pve.bootstrap.LauncherShutdownHandoff;
 import com.ryanjei.orushio.pve.bootstrap.RuntimeConfiguration;
 import com.ryanjei.orushio.pve.bootstrap.StartupState;
 import com.ryanjei.orushio.pve.domain.GameSession;
+import com.ryanjei.orushio.pve.economy.*;
 import com.ryanjei.orushio.pve.http.AdminHttpServer;
 import com.ryanjei.orushio.pve.logging.AuditLog;
 import com.ryanjei.orushio.pve.map.*;
@@ -30,6 +31,7 @@ public final class OrushioPvePlugin extends JavaPlugin {
     private BootstrapHandoff bootstrapHandoff;
     private LauncherShutdownHandoff shutdownHandoff;
     private BukkitTask lifecycleTimer;
+    private BukkitTask economyTimer;
     private ParticipantConnectionDispatcher participantConnections;
 
     @Override
@@ -76,9 +78,14 @@ public final class OrushioPvePlugin extends JavaPlugin {
             pendingPlayerCleanup.findAll();
             PlayerInventoryLifecycleStep inventoryStep = new PlayerInventoryLifecycleStep(
                     new PaperPlayerInventoryGateway(gameThread), pendingPlayerCleanup, audit);
+            java.util.concurrent.atomic.AtomicReference<DefaultGameApplicationService> gamesReference=new java.util.concurrent.atomic.AtomicReference<>();
+            FarmEconomyLifecycleStep economyStep=new FarmEconomyLifecycleStep(
+                    new YamlGameplaySettingsRepository(mapsRoot),runtimeStep,
+                    new PaperFarmEconomyGateway(gameThread,()->gamesReference.get().current(),runtimeStep),audit);
             DefaultGameApplicationService games = createGames(
                     data, startup, mapSetupConsistency.session(), serverAdministration, mapProfiles, mapsRoot, audit,
-                    List.of(inventoryStep, runtimeStep));
+                    List.of(inventoryStep, runtimeStep, economyStep));
+            gamesReference.set(games);
             MapAdministrationService maps = new DefaultMapAdministrationService(
                     mapsRoot, mapProfiles,
                     new SafeWorldZipImporter(mapsRoot, SafeWorldZipImporter.Limits.defaults()),
@@ -89,8 +96,10 @@ public final class OrushioPvePlugin extends JavaPlugin {
                         getLogger().log(Level.SEVERE,
                                 "ゲーム参加者の接続状態を保存できませんでした。管理画面の診断情報を確認してください。"));
                 getServer().getPluginManager().registerEvents(new GameLifecycleListener(participantConnections), this);
+                getServer().getPluginManager().registerEvents(new FarmEconomyListener(games,economyStep),this);
                 lifecycleTimer = getServer().getScheduler().runTaskTimerAsynchronously(this,
                         () -> expireGameSafely(games), 20L, 20L);
+                economyTimer=getServer().getScheduler().runTaskTimer(this,()->economyStep.tick(games.current(),Instant.now()),20L,20L);
             }
 
             ensureSecrets(data, config);
@@ -201,6 +210,7 @@ public final class OrushioPvePlugin extends JavaPlugin {
             lifecycleTimer.cancel();
             lifecycleTimer = null;
         }
+        if(economyTimer!=null){economyTimer.cancel();economyTimer=null;}
         if (participantConnections != null) {
             participantConnections.close();
             participantConnections = null;
