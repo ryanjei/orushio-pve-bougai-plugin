@@ -141,7 +141,7 @@ public final class OrushioPvePlugin extends JavaPlugin {
                     () -> diagnostics(startup, mapSetupConsistency, audit, bound[0], data, games, temporaryWorlds),
                     audit, ()->startup.diagnosticMode()||temporaryWorlds.recoveryRequired(),
                     ()->games.current().state()==com.ryanjei.orushio.pve.domain.GameState.RECOVERING,
-                    shutdownToken, shutdownController::request,interference,pveSettingsAdministration,economySettingsAdministration);
+                    shutdownToken, shutdownController::request,interference,pveSettingsAdministration,economySettingsAdministration,getLogger());
             http.start();
             bound[0] = true;
             bootstrapHandoff.publish(config.port(), http.issueBootstrapToken());
