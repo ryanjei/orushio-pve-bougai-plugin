@@ -13,7 +13,7 @@ public record MapProfile(MapProfileId mapId, String displayName, boolean enabled
     public static final Set<String> RETIRED_AREA_FIELDS=Set.of("gateRegions","checkpoints");
     public static final Map<SetupMarkerType,Integer> REQUIRED_MARKERS=Map.of(
         SetupMarkerType.FARM_RESPAWN,1,SetupMarkerType.GAME_START,1,SetupMarkerType.NORMAL_CORE,3,
-        SetupMarkerType.FINAL_CORE,1,SetupMarkerType.FINAL_AREA_ENTRY,1,SetupMarkerType.FINAL_GATE,1);
+        SetupMarkerType.FINAL_CORE,1,SetupMarkerType.FINAL_AREA_ENTRY,1,SetupMarkerType.FINAL_AREA_DESTINATION,1,SetupMarkerType.FINAL_GATE,1);
     /** 旧fixture互換。Runtimeの必須領域はREQUIRED_RUNTIME_AREA_COUNTSを使用する。 */
     @Deprecated public static final Map<String,Integer> REQUIRED_AREA_COUNTS=Map.of("farmRegion",1,"enemyZones",1,"finalRegion",1,"gateRegions",1);
     private static final Map<String,Integer>REQUIRED_RUNTIME_AREA_COUNTS=Map.of("farmRegion",1,"enemyZones",1,"finalRegion",1);
@@ -27,7 +27,7 @@ public record MapProfile(MapProfileId mapId, String displayName, boolean enabled
     public MapProfile(MapProfileId mapId,String displayName,boolean enabled,String templateDirectory,Map<String,List<BlockPoint>> points,Map<String,List<Cuboid>> areas,Instant createdAt){this(mapId,displayName,enabled,templateDirectory,points,areas,createdAt,List.of(),List.of());}
     public MapProfile(MapProfileId mapId,String displayName,boolean enabled,String templateDirectory,Map<String,List<BlockPoint>> points,Map<String,List<Cuboid>> areas,Instant createdAt,List<SpawnMarker> markers){this(mapId,displayName,enabled,templateDirectory,points,areas,createdAt,markers,List.of());}
     private static <T> Map<String,List<T>> immutable(Map<String,List<T>> source){Map<String,List<T>> copy=new LinkedHashMap<>();source.forEach((k,v)->copy.put(k,List.copyOf(v)));return Collections.unmodifiableMap(copy);}
-    public List<String> missingRequirements(){return missing(areas,setupMarkers);}private static List<String> missing(Map<String,List<Cuboid>> areas,List<SetupMarker>markers){List<String> missing=new ArrayList<>();REQUIRED_RUNTIME_AREA_COUNTS.forEach((k,n)->{if(areas.getOrDefault(k,List.of()).size()<n)missing.add(k);});REQUIRED_MARKERS.forEach((type,n)->{if(markers.stream().filter(SetupMarker::enabled).filter(marker->marker.markerType()==type).count()<n)missing.add("marker:"+type.name());});return List.copyOf(missing);}
+    public List<String> missingRequirements(){return missing(areas,setupMarkers);}private static List<String> missing(Map<String,List<Cuboid>> areas,List<SetupMarker>markers){List<String> missing=new ArrayList<>();REQUIRED_RUNTIME_AREA_COUNTS.forEach((k,n)->{if(areas.getOrDefault(k,List.of()).size()<n)missing.add(k);});REQUIRED_MARKERS.forEach((type,n)->{long count=markers.stream().filter(SetupMarker::enabled).filter(marker->marker.markerType()==type).count();if(type==SetupMarkerType.FINAL_AREA_DESTINATION?count!=n:count<n)missing.add("marker:"+type.name());});return List.copyOf(missing);}
     public boolean setupComplete(){return missingRequirements().isEmpty();}
     public MapProfile withEnabled(boolean value){return new MapProfile(mapId,displayName,value,templateDirectory,points,areas,createdAt,spawnMarkers,setupMarkers);}
     public MapProfile withDraft(Map<String,List<BlockPoint>> newPoints,Map<String,List<Cuboid>> newAreas){return withDraft(newPoints,newAreas,spawnMarkers);}
