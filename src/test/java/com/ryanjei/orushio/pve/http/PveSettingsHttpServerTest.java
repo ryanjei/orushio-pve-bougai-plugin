@@ -1,0 +1,35 @@
+package com.ryanjei.orushio.pve.http;
+
+import com.ryanjei.orushio.pve.application.*;
+import com.ryanjei.orushio.pve.domain.*;
+import com.ryanjei.orushio.pve.logging.AuditSink;
+import com.ryanjei.orushio.pve.map.*;
+import com.ryanjei.orushio.pve.persistence.*;
+import com.ryanjei.orushio.pve.pve.*;
+import com.ryanjei.orushio.pve.security.AuthService;
+import org.junit.jupiter.api.*;
+import java.net.*;
+import java.net.http.*;
+import java.time.*;
+import java.util.*;
+import static org.junit.jupiter.api.Assertions.*;
+
+class PveSettingsHttpServerTest {
+    private final UUID zoneId=UUID.randomUUID(); private final State state=new State(); private final CapturingAudit audit=new CapturingAudit();
+    private AdminHttpServer server;private HttpClient client;private String base,cookie,csrf,revision;
+    @BeforeEach void start()throws Exception{Cuboid zone=new Cuboid(20,60,20,25,70,25),farm=new Cuboid(0,60,0,10,70,10);MapProfile profile=new MapProfile(new MapProfileId("map-a"),"A",false,"template",Map.of("farmSpawn",List.of(new BlockPoint(1,64,1,0,0))),Map.of("farmRegion",List.of(farm),"enemyZones",List.of(zone)),Instant.now());MemorySettings settings=new MemorySettings(new PveSettings(List.of(new PveSettings.EnemyZone(zoneId,zone,Duration.ofSeconds(2),1,Map.of(EnemyType.ZOMBIE,1),2,30))));PveSettingsAdministrationService pve=new PveSettingsAdministrationService(settings,new Profiles(profile),new Launches(),state::session);server=new AdminHttpServer(InetAddress.getByName("127.0.0.1"),0,new DefaultGameApplicationService(new Sessions()),new Administration(),null,new AuthService(),()->Map.of(),audit,()->state.diagnostic,()->state.recovery,null,null,null,pve);server.start();client=HttpClient.newHttpClient();base="http://127.0.0.1:"+server.port();String token=server.issueBootstrapToken();var auth=client.send(HttpRequest.newBuilder(URI.create(base+"/auth/bootstrap")).header("X-Bootstrap-Token",token).POST(HttpRequest.BodyPublishers.noBody()).build(),HttpResponse.BodyHandlers.ofString());cookie=auth.headers().firstValue("Set-Cookie").orElseThrow().split(";",2)[0];csrf=extract(auth.body(),"csrfToken");var get=get();assertEquals(200,get.statusCode());revision=extract(get.body(),"revision");}
+    @AfterEach void stop(){server.close();}
+    @Test void GETとPUTは保存値_Final区分_Auditを返す()throws Exception{assertTrue(get().body().contains("\"zoneTypeLabel\":\"通常エリア\""));var response=put(zoneId,3,2,60,30,10,3,28,cookie,csrf);assertEquals(200,response.statusCode());assertTrue(response.body().contains("\"spawnIntervalSeconds\":3"));assertEquals("PVE_SETTINGS_UPDATED",audit.code);}
+    @Test void 未認証_CSRF_diagnostic_recovery_ACTIVEを拒否する()throws Exception{assertEquals(401,put(zoneId,2,1,1,0,0,2,30,"",csrf).statusCode());assertEquals(403,put(zoneId,2,1,1,0,0,2,30,cookie,"bad").statusCode());state.diagnostic=true;assertEquals(503,put(zoneId,2,1,1,0,0,2,30,cookie,csrf).statusCode());state.diagnostic=false;state.recovery=true;assertEquals(503,put(zoneId,2,1,1,0,0,2,30,cookie,csrf).statusCode());state.recovery=false;state.gameState=GameState.ACTIVE;assertEquals(409,put(zoneId,2,1,1,0,0,2,30,cookie,csrf).statusCode());}
+    @Test void 未知Zone_負数_Weight合計0_minMax不整合を拒否する()throws Exception{assertEquals(400,put(UUID.randomUUID(),2,1,1,0,0,2,30,cookie,csrf).statusCode());assertEquals(400,put(zoneId,2,-1,1,0,0,2,30,cookie,csrf).statusCode());assertEquals(400,put(zoneId,2,1,0,0,0,2,30,cookie,csrf).statusCode());assertEquals(400,put(zoneId,2,1,1,0,0,30,2,cookie,csrf).statusCode());assertTrue(get().body().contains("\"baseSpawnCount\":1"));}
+    private HttpResponse<String>get()throws Exception{return client.send(HttpRequest.newBuilder(URI.create(base+"/api/v1/maps/pve-settings?mapId=map-a")).header("Cookie",cookie).GET().build(),HttpResponse.BodyHandlers.ofString());}
+    private HttpResponse<String>put(UUID id,int interval,int count,int z,int s,int c,double min,double max,String authCookie,String csrfValue)throws Exception{String body="{\"mapId\":\"map-a\",\"revision\":\""+revision+"\",\"enemyZoneId\":\""+id+"\",\"spawnIntervalSeconds\":"+interval+",\"baseSpawnCount\":"+count+",\"zombieWeight\":"+z+",\"skeletonWeight\":"+s+",\"creeperWeight\":"+c+",\"minParticipantDistance\":"+min+",\"maxParticipantDistance\":"+max+"}";var request=HttpRequest.newBuilder(URI.create(base+"/api/v1/maps/pve-settings")).header("Origin",base).header("X-CSRF-Token",csrfValue).header("Content-Type","application/json");if(!authCookie.isEmpty())request.header("Cookie",authCookie);return client.send(request.PUT(HttpRequest.BodyPublishers.ofString(body)).build(),HttpResponse.BodyHandlers.ofString());}
+    private static String extract(String json,String key){String marker="\""+key+"\":\"";int start=json.indexOf(marker)+marker.length();return json.substring(start,json.indexOf('"',start));}
+    private static final class State{GameState gameState=GameState.IDLE;boolean diagnostic,recovery;GameSession session(){return new GameSession(UUID.randomUUID(),gameState,List.of(),Instant.now(),null,0,60,2,1,null,null,Set.of());}}
+    private static final class MemorySettings implements PveSettingsRepository{PveSettings value;MemorySettings(PveSettings value){this.value=value;}public PveSettings load(String id){return value;}public void save(String id,PveSettings value){this.value=value;}}
+    private record Profiles(MapProfile value)implements MapProfileRepository{public List<MapProfile>findAll(){return List.of(value);}public Optional<MapProfile>find(MapProfileId id){return Optional.of(value);}public void save(MapProfile ignored){}public void delete(MapProfileId ignored){}}
+    private static final class Launches implements GameLaunchSettingsRepository{public GameLaunchSettings load(String id){return GameLaunchSettings.defaults();}public void save(String id,GameLaunchSettings ignored){}}
+    private static final class Sessions implements ActiveSessionRepository{public Optional<GameSession>load(){return Optional.empty();}public void save(GameSession ignored){}}
+    private static final class Administration implements ServerAdministrationService{public List<OnlinePlayerView>onlinePlayers(){return List.of();}public OnlinePlayerView grantSetupAdministrator(UUID id){throw new UnsupportedOperationException();}public OnlinePlayerView adoptSetupAdministrator(UUID id){throw new UnsupportedOperationException();}public OnlinePlayerView revokeSetupAdministrator(UUID id){throw new UnsupportedOperationException();}public boolean whitelistEnabled(){return false;}public boolean setWhitelistEnabled(boolean value){return value;}public List<WhitelistEntryView>whitelistedPlayers(){return List.of();}public WhitelistEntryView addWhitelistedPlayer(String name){return new WhitelistEntryView(UUID.randomUUID(),name);}public void removeWhitelistedPlayer(String name){}}
+    private static final class CapturingAudit implements AuditSink{String code;public void record(String a,String b,String c,String d){code=c;}public boolean healthy(){return true;}}
+}

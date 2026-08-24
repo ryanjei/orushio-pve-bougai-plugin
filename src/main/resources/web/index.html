@@ -1,11 +1,11 @@
 <!doctype html>
 <html lang="ja">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OPBP 管理</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/setup-marker.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OPBP 管理</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/setup-marker.css"><link rel="stylesheet" href="/pve-settings.css"></head>
 <body>
 <aside><h1>OPBP</h1><nav>
 <button data-page="home">ホーム</button><button data-page="game">ゲーム操作</button>
 <button data-page="maps-page">マップ管理</button><button disabled>マップ設定 <small>マップ管理画面から開始</small></button>
-<button disabled>バランス <small>後続Phase</small></button><button disabled>装備・ショップ <small>後続Phase</small></button>
+<button data-page="pve-page">PvE設定</button><button disabled>装備・ショップ <small>後続Phase</small></button>
 <button disabled>履歴・ログ <small>後続Phase</small></button><button data-page="system">システム</button>
 </nav></aside>
 <main><header><div><p class="eyebrow">サーバー管理</p><h2 id="title">ホーム</h2></div><span id="notice" role="status">認証待ち</span></header>
@@ -24,11 +24,12 @@
 <label for="game-map">使用マップ</label><select id="game-map"></select>
 <h4 id="game-participant-heading">ゲーム参加者</h4><ul id="game-participants" class="list"><li>読み込んでいます…</li></ul>
 <h4>今回の設定</h4><div class="game-settings"><label>制限時間（分）<input id="game-time-limit" type="number" min="1" max="1440" placeholder="既定値 60"></label><label>攻略通常コア数<input id="game-required-cores" type="number" min="1" max="1000" placeholder="既定値 2"></label><label>敵人数倍率<input id="game-enemy-multiplier" type="number" min="0.01" max="100" step="0.01" placeholder="既定値 1.0"></label></div>
-<p>空欄はマップ別の上書きを解除し、既定値を使います。</p><div class="actions"><button id="game-save-settings" class="secondary">マップ別設定を保存</button><button id="game-primary">設定完了</button><button id="game-abort" class="danger">ゲームを中止</button></div>
+<p>空欄はマップ別の上書きを解除し、既定値を使います。</p><p id="game-settings-source"></p><div class="actions"><button id="game-save-settings" class="secondary">マップ別設定を保存</button><button id="game-primary">設定完了</button><button id="game-abort" class="danger">ゲームを中止</button></div>
 <div id="game-readiness"></div></article>
 <article class="panel"><h3>妨害テスト</h3><p>最終エリア内にいる現在の参加者へ、本番条件で妨害を適用します。</p><div class="actions"><button data-interference="DARKNESS" disabled>暗闇</button><button data-interference="HOTBAR_SHUFFLE" disabled>ホットバーシャッフル</button><button data-interference="LEVITATION" disabled>浮遊</button></div><p id="interference-result">まだ実行されていません。</p></article>
 <article class="panel"><h3>旧参加受付操作</h3><div class="actions"><button id="start">参加受付を開始</button><button id="close" class="warning">参加受付を終了</button></div></article>
 </section>
+<section id="pve-page" hidden><article class="panel"><div class="panel-title"><div><h3>PvE設定</h3><p>マップごとのEnemy Zone設定です。変更は次のゲーム開始時に反映されます。</p></div><button id="pve-refresh" class="secondary">更新</button></div><label for="pve-map">対象マップ</label><select id="pve-map"></select><p id="pve-status">マップを選択してください。</p><div id="pve-zones"></div></article></section>
 <section id="maps-page" hidden><article class="panel"><h3>ワールドZIP登録</h3><form id="map-import-form"><label for="map-id">mapId（英小文字・数字・ハイフン）</label><input id="map-id" required pattern="[a-z0-9-]{1,40}"><label for="map-name">表示名</label><input id="map-name" required><label for="map-zip">Java版ワールドZIP</label><input id="map-zip" type="file" accept=".zip" required><button type="submit">安全に検証して登録</button></form></article><article class="panel"><div class="panel-title"><h3>登録済みマップ</h3><button id="maps-refresh" class="secondary">更新</button></div><div id="map-list"><p>読み込んでいます…</p></div></article><article class="panel"><h3>セットアップ</h3><label for="setup-admin">操作するオンライン管理者</label><select id="setup-admin"></select><div id="setup-status">開始されていません</div><h4>専用設定ブロック</h4><div id="event-marker-summary"><p>セットアップ開始後に表示します。</p></div><div id="event-marker-detail" hidden><div class="panel-title"><h4>設定地点一覧</h4><button id="event-marker-back" class="secondary">種類一覧へ戻る</button></div><label for="event-marker-filter">種類フィルター</label><select id="event-marker-filter"></select><div id="event-marker-list"></div></div><details><summary>従来の範囲・地点設定（既存Phase 4互換）</summary><ul id="setup-field-status" class="list compact"></ul><h4>Area別スポーン地点</h4><div id="spawn-marker-areas"><p>セットアップ開始後に表示します。</p></div></details><div class="actions"><button id="setup-save">保存終了</button><button id="setup-discard" class="danger">破棄終了</button></div></article></section>
 <section id="system" hidden><article class="panel"><h3>システム診断</h3><dl id="diagnostics"></dl></article><article id="setup-recovery" class="panel" hidden><h3>前回のマップセットアップが正常終了していません</h3><dl id="setup-recovery-details"></dl><p id="setup-recovery-warning"></p><button id="setup-recovery-discard" class="danger">復旧して破棄</button></article></section>
 </main><script src="/ui-format.js"></script><script src="/app.js"></script></body></html>

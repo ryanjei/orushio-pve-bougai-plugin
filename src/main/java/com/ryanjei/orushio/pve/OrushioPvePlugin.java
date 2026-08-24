@@ -129,13 +129,16 @@ public final class OrushioPvePlugin extends JavaPlugin {
             LauncherShutdownToken shutdownToken = new LauncherShutdownToken();
             PaperShutdownController shutdownController = new PaperShutdownController(
                     gameThread, () -> getServer().shutdown());
+            PveSettingsAdministrationService pveSettingsAdministration=new PveSettingsAdministrationService(
+                    new YamlPveSettingsRepository(mapsRoot),mapProfiles,
+                    new YamlGameLaunchSettingsRepository(mapsRoot),games::current);
             http = new AdminHttpServer(
                     InetAddress.getByName("127.0.0.1"), config.port(), games, serverAdministration, maps,
                     new AuthService(),
                     () -> diagnostics(startup, mapSetupConsistency, audit, bound[0], data, games, temporaryWorlds),
                     audit, ()->startup.diagnosticMode()||temporaryWorlds.recoveryRequired(),
                     ()->games.current().state()==com.ryanjei.orushio.pve.domain.GameState.RECOVERING,
-                    shutdownToken, shutdownController::request,interference);
+                    shutdownToken, shutdownController::request,interference,pveSettingsAdministration);
             http.start();
             bound[0] = true;
             bootstrapHandoff.publish(config.port(), http.issueBootstrapToken());

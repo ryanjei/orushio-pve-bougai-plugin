@@ -1,0 +1,28 @@
+.pve-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.pve-zone {
+  margin-top: 16px;
+  padding: 16px;
+  background: #101d2a;
+  border-radius: 8px;
+}
+
+.pve-zone h4 { margin-top: 0; }
+.pve-zone input, .pve-zone select, #pve-map {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #40546a;
+  border-radius: 7px;
+  background: #101d2a;
+  color: #fff;
+}
+.section-status { min-height: 1.5em; }
+.muted { color: #aabaca; }
+
+@media (max-width: 800px) {
+  .pve-grid { grid-template-columns: 1fr; }
+}

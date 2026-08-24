@@ -4,7 +4,7 @@ const escapeHtml = value => { const node = document.createElement('div'); node.t
 async function api(path, options = {}) { options.headers = { 'Content-Type': 'application/json', ...(options.headers || {}), 'X-CSRF-Token': csrf }; const response = await fetch('/api/v1' + path, options); const json = await response.json(); if (!response.ok) { const error = new Error(json.error?.message || '操作に失敗しました'); error.traceId = json.error?.traceId; throw error; } return json.data; }
 function notify(message, type = 'info', traceId = '') { $('notice').className = type; $('notice').textContent = traceId ? `${message}（追跡ID: ${traceId}）` : message; }
 function setLoading(value) { loading = value; document.body.classList.toggle('loading', value); for (const element of document.querySelectorAll('button:not(nav button), input')) { if (value && !element.disabled) { element.disabled = true; element.dataset.loadingDisabled = 'true'; } if (!value && element.dataset.loadingDisabled) { element.disabled = false; delete element.dataset.loadingDisabled; } } }
-function show(page) { for (const id of ['home', 'game', 'maps-page', 'system']) $(id).hidden = true; $(page).hidden = false; $('title').textContent = { home: 'ホーム', game: 'ゲーム操作', 'maps-page': 'マップ管理', system: 'システム' }[page]; if (page === 'system') loadDiagnostics(); if(page === 'maps-page') loadMaps(); if(page === 'game') loadLifecycle(); }
+function show(page) { for (const id of ['home', 'game', 'pve-page', 'maps-page', 'system']) $(id).hidden = true; $(page).hidden = false; $('title').textContent = { home: 'ホーム', game: 'ゲーム操作', 'pve-page': 'PvE設定', 'maps-page': 'マップ管理', system: 'システム' }[page]; if (page === 'system') loadDiagnostics(); if(page === 'maps-page') loadMaps(); if(page === 'game') loadLifecycle(); if(page === 'pve-page') loadPveSettingsPage(); }
 document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => show(button.dataset.page)));
 function gameStateLabel(state) { return {IDLE:'待機中',RECRUITING:'待機中',MAP_SETUP:'マップセットアップ中',PREPARING:'ゲーム準備中',ACTIVE:'ゲーム進行中',PAUSED:'ゲーム進行中',CLEAR:'クリア処理中',ABORTING:'中止処理中',RECOVERING:'復旧処理中'}[state] || state; }
 function renderStatus(status) { current = status; $('paper').textContent = status.paperRunning ? '稼働中' : '停止'; $('state').textContent = gameStateLabel(status.gameState); $('participants').textContent = `${status.participantCount} / ${status.participantLimit}`; $('warnings').innerHTML = (status.warnings || []).map(value => `<li>${escapeHtml(value)}</li>`).join('') || '<li class="empty">警告はありません</li>'; }
@@ -32,7 +32,8 @@ function renderLifecycle(value) {
   $('progression-status').innerHTML+=`<br><strong>PvE Enemy:</strong> ${Number(pve.enemyCount||0)} / ${Number(pve.enemyLimit||0)}　<strong>開始人数:</strong> ${Number(pve.participantCount||value.participantCountAtStart||0)}　<strong>難易度倍率:</strong> ${Number(pve.difficultyMultiplier||value.enemyMultiplier||0)}`;
   $('game-participant-heading').textContent = `ゲーム参加者（1～${value.participantLimit}人）`;
   const selected = new Set(value.participants.map(player => player.uuid));
-  const participantRows = value.participants.map(player => `<li><span>${escapeHtml(player.name)}<small>参加者に選択済み / ${player.connected ? 'オンライン' : 'オフライン（参加登録は維持）'}</small></span><button data-game-participant="${escapeHtml(player.uuid)}" data-selected="true" class="danger">参加から外す</button></li>`);
+  const progressionPlayers = new Map((progress.participants||[]).map(player=>[player.uuid,player]));
+  const participantRows = value.participants.map(player => { const state=progressionPlayers.get(player.uuid)||{}; return `<li><span>${escapeHtml(player.name)}<small>UUID: ${escapeHtml(player.uuid)} / ${player.connected ? 'オンライン' : 'オフライン（参加登録は維持）'} / 最終エリア: ${state.finalAreaEntered?'進入済み':'未進入'} / Checkpoint: ${state.checkpointActive?'取得済み':'未取得'}</small></span><button data-game-participant="${escapeHtml(player.uuid)}" data-selected="true" class="danger">参加から外す</button></li>`; });
   const candidateRows = onlinePlayers.filter(player => !selected.has(player.uuid)).map(player => `<li><span>${escapeHtml(player.name)}<small>オンライン</small></span><button data-game-participant="${escapeHtml(player.uuid)}" data-selected="false">参加者に追加</button></li>`);
   $('game-participants').innerHTML = [...participantRows, ...candidateRows].join('') || '<li class="empty">オンラインプレイヤーがいません</li>';
   const start = value.start;
@@ -40,8 +41,9 @@ function renderLifecycle(value) {
     $('game-time-limit').value = start.settings.timeLimitMinutes ?? '';
     $('game-required-cores').value = start.settings.requiredNormalCores ?? '';
     $('game-enemy-multiplier').value = start.settings.enemyMultiplier ?? '';
+    $('game-settings-source').textContent = `制限時間: ${start.settings.timeLimitMinutes==null?'既定値':'マップ別設定'} / 通常Core数: ${start.settings.requiredNormalCores==null?'既定値':'マップ別設定'} / 敵倍率: ${start.settings.enemyMultiplier==null?'既定値':'マップ別設定'}`;
     $('game-readiness').innerHTML = start.ready ? `<p class="success">ゲーム設定は完了しています。制限 ${start.resolved.timeLimitMinutes}分 / 通常コア ${start.resolved.requiredNormalCores}個 / 敵倍率 ${start.resolved.enemyMultiplier}</p>` : `<p class="error">ゲームを開始できません。マップ設定に不足があります。</p><ul class="list compact">${start.missing.map(item=>`<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
-  } else $('game-readiness').textContent = '有効でセットアップ済みのマップを選択してください。';
+  } else { $('game-readiness').textContent = '有効でセットアップ済みのマップを選択してください。'; $('game-settings-source').textContent=''; }
   const editable = value.state === 'IDLE' || value.state === 'RECRUITING';
   $('game-save-settings').disabled = !editable || !start; const primary=$('game-primary');primary.hidden=!['IDLE','RECRUITING','PREPARING'].includes(value.state);primary.textContent=value.state==='PREPARING'?'ゲーム開始':'設定完了';primary.disabled=value.state==='PREPARING'?false:!editable||!start?.ready;
   $('game-abort').disabled = !['PREPARING','ACTIVE','ABORTING','RECOVERING'].includes(value.state); $('game-abort').textContent = ['ABORTING','RECOVERING'].includes(value.state) ? '復旧清掃を再試行' : 'ゲームを中止';
@@ -105,4 +107,42 @@ async function loadSetupSilently(force=false){if(loading||$('maps-page').hidden)
 $('setup-save').onclick=async()=>{try{await api('/maps/setup/save',{method:'POST',headers:{'If-Session-Id':current.sessionId}});notify('セットアップを保存しました','success');await refresh({notifyResult:false});await loadMaps();}catch(error){notify(error.message,'error',error.traceId);}};
 $('setup-discard').onclick=async()=>{if(!confirm('今回のセットアップ変更を破棄しますか？'))return;try{await api('/maps/setup/discard',{method:'POST',headers:{'If-Session-Id':current.sessionId}});notify('セットアップを破棄しました','success');await refresh({notifyResult:false});await loadMaps();}catch(error){notify(error.message,'error',error.traceId);}};
 const renderSetupWithActiveFields=renderSetup,retiredSetupFields=new Set(['farmSpawn','combatEntry','normalCoreCandidates','finalCore','finalEntryTrigger','shopPoints','gateRegions','checkpoints']);renderSetup=value=>renderSetupWithActiveFields({...value,fields:(value.fields||[]).filter(field=>!retiredSetupFields.has(field.key))});
+
+let pveSettingsView = null;
+async function loadPveSettingsPage() {
+  try {
+    if (!csrf) csrf = (await api('/auth/session')).csrfToken;
+    const result = await api('/maps'), previous = $('pve-map').value;
+    $('pve-map').innerHTML = result.maps.map(map => `<option value="${escapeHtml(map.mapId)}">${escapeHtml(map.displayName)}（${escapeHtml(map.mapId)}）</option>`).join('') || '<option value="">登録済みマップがありません</option>';
+    if (result.maps.some(map => map.mapId === previous)) $('pve-map').value = previous;
+    await loadPveSettings();
+  } catch (error) { renderPveError(error); }
+}
+async function loadPveSettings() {
+  const mapId = $('pve-map').value;
+  if (!mapId) { $('pve-zones').innerHTML=''; $('pve-status').textContent='登録済みマップがありません。'; return; }
+  try { renderPveSettings(await api(`/maps/pve-settings?mapId=${encodeURIComponent(mapId)}`)); }
+  catch (error) { renderPveError(error); }
+}
+function renderPveError(error) {
+  $('pve-status').className='error section-status'; $('pve-status').textContent=error.message;
+  $('pve-zones').innerHTML='';
+}
+function renderPveSettings(value) {
+  pveSettingsView=value;
+  $('pve-status').className=value.editable?'section-status success':'section-status error';
+  $('pve-status').textContent=value.editable?'編集できます。保存内容は次のゲーム開始時に反映されます。':'ゲーム進行中のため編集できません。';
+  $('pve-zones').innerHTML=value.enemyZones.map(zone=>`<form class="pve-zone" data-pve-zone="${escapeHtml(zone.enemyZoneId)}"><h4>${escapeHtml(zone.zoneTypeLabel)}Zone</h4><p class="muted">ID: ${escapeHtml(zone.enemyZoneId)}<br>範囲: X ${zone.region.minX}～${zone.region.maxX} / Y ${zone.region.minY}～${zone.region.maxY} / Z ${zone.region.minZ}～${zone.region.maxZ}</p><div class="pve-grid"><label>Spawn間隔（秒）<input name="spawnIntervalSeconds" type="number" min="1" step="1" value="${zone.spawnIntervalSeconds}" required></label><label>基本Spawn数<input name="baseSpawnCount" type="number" min="1" step="1" value="${zone.baseSpawnCount}" required></label><label>ゾンビ Weight<input name="zombieWeight" type="number" min="0" step="1" value="${zone.zombieWeight}" required></label><label>スケルトン Weight<input name="skeletonWeight" type="number" min="0" step="1" value="${zone.skeletonWeight}" required></label><label>クリーパー Weight<input name="creeperWeight" type="number" min="0" step="1" value="${zone.creeperWeight}" required></label><label>参加者との最小距離<input name="minParticipantDistance" type="number" min="0" step="0.1" value="${zone.minParticipantDistance}" required></label><label>参加者との最大距離<input name="maxParticipantDistance" type="number" min="0.1" step="0.1" value="${zone.maxParticipantDistance}" required></label></div><div class="actions"><button type="submit" disabled>このZoneを保存</button></div><p class="section-status" data-pve-message></p></form>`).join('')||'<p class="muted">Enemy Zoneは登録されていません。</p>';
+  document.querySelectorAll('[data-pve-zone]').forEach(form=>{for(const input of form.elements)input.disabled=!value.editable||input.type==='submit';});
+}
+$('pve-map').onchange=loadPveSettings;
+$('pve-refresh').onclick=loadPveSettingsPage;
+$('pve-zones').oninput=event=>{const form=event.target.closest('[data-pve-zone]');if(form&&pveSettingsView?.editable)form.querySelector('button[type="submit"]').disabled=false;};
+$('pve-zones').onsubmit=async event=>{
+  event.preventDefault(); const form=event.target, button=form.querySelector('button[type="submit"]'), message=form.querySelector('[data-pve-message]'), data=new FormData(form);
+  button.disabled=true; message.className='section-status'; message.textContent='保存中…';
+  const body={mapId:pveSettingsView.mapId,revision:pveSettingsView.revision,enemyZoneId:form.dataset.pveZone,spawnIntervalSeconds:Number(data.get('spawnIntervalSeconds')),baseSpawnCount:Number(data.get('baseSpawnCount')),zombieWeight:Number(data.get('zombieWeight')),skeletonWeight:Number(data.get('skeletonWeight')),creeperWeight:Number(data.get('creeperWeight')),minParticipantDistance:Number(data.get('minParticipantDistance')),maxParticipantDistance:Number(data.get('maxParticipantDistance'))};
+  try { const saved=await api('/maps/pve-settings',{method:'PUT',body:JSON.stringify(body)}); renderPveSettings(saved); const savedForm=document.querySelector(`[data-pve-zone="${CSS.escape(body.enemyZoneId)}"]`); savedForm.querySelector('[data-pve-message]').className='section-status success'; savedForm.querySelector('[data-pve-message]').textContent='保存しました'; }
+  catch(error){message.className='section-status error';message.textContent=error.message;button.disabled=false;}
+};
 refresh(); setInterval(() => refresh({ notifyResult: false, silent: true }), 5000); setInterval(() => loadSetupSilently(), 1500); setInterval(() => loadLifecycleSilently(), 1500);
