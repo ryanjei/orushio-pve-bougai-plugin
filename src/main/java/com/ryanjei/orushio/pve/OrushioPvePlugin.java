@@ -132,13 +132,16 @@ public final class OrushioPvePlugin extends JavaPlugin {
             PveSettingsAdministrationService pveSettingsAdministration=new PveSettingsAdministrationService(
                     new YamlPveSettingsRepository(mapsRoot),mapProfiles,
                     new YamlGameLaunchSettingsRepository(mapsRoot),games::current);
+            MapEconomySettingsAdministrationService economySettingsAdministration=new MapEconomySettingsAdministrationService(
+                    new YamlCoreSettingsRepository(mapsRoot),new YamlGameplaySettingsRepository(mapsRoot),mapProfiles,
+                    new PaperResourceMaterialValidator(),games::current);
             http = new AdminHttpServer(
                     InetAddress.getByName("127.0.0.1"), config.port(), games, serverAdministration, maps,
                     new AuthService(),
                     () -> diagnostics(startup, mapSetupConsistency, audit, bound[0], data, games, temporaryWorlds),
                     audit, ()->startup.diagnosticMode()||temporaryWorlds.recoveryRequired(),
                     ()->games.current().state()==com.ryanjei.orushio.pve.domain.GameState.RECOVERING,
-                    shutdownToken, shutdownController::request,interference,pveSettingsAdministration);
+                    shutdownToken, shutdownController::request,interference,pveSettingsAdministration,economySettingsAdministration);
             http.start();
             bound[0] = true;
             bootstrapHandoff.publish(config.port(), http.issueBootstrapToken());
