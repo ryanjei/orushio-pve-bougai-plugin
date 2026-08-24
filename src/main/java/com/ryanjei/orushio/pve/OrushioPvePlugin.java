@@ -91,9 +91,9 @@ public final class OrushioPvePlugin extends JavaPlugin {
                     new PaperResourceMaterialValidator(),audit);
             Random pveRandom=new Random();RandomSource pveRandomSource=pveRandom::nextInt;
             PaperPveEnemyGateway pveGateway=new PaperPveEnemyGateway(this,gameThread,()->gamesReference.get().current(),runtimeStep,pveRandomSource);
-            PveLifecycleStep pveStep=new PveLifecycleStep(new YamlPveSettingsRepository(mapsRoot),runtimeStep,pveGateway,pveRandomSource,audit);
-            Random coreRandom=new Random();PaperCoreGateway coreGateway=new PaperCoreGateway(this,gameThread,()->gamesReference.get().current(),runtimeStep);
             FinalAreaProgressionStep finalAreaStep=new FinalAreaProgressionStep(runtimeStep,new PaperFinalAreaGateway(gameThread,runtimeStep),audit);
+            PveLifecycleStep pveStep=new PveLifecycleStep(new YamlPveSettingsRepository(mapsRoot),runtimeStep,pveGateway,pveRandomSource,audit,finalAreaStep::isUnlocked);
+            Random coreRandom=new Random();PaperCoreGateway coreGateway=new PaperCoreGateway(this,gameThread,()->gamesReference.get().current(),runtimeStep);
             CoreProgressListener coreProgress=new GameCoreProgressListener((sessionId,destroyed)->{economyStep.unlockTiersForCoreProgress(sessionId,destroyed);finalAreaStep.normalCoreDestroyed(sessionId,destroyed);},gamesReference::get,task->getServer().getScheduler().runTaskAsynchronously(this,task),finalAreaStep::finalCoreDestroyed);
             CoreLifecycleStep coreStep=new CoreLifecycleStep(new YamlCoreSettingsRepository(mapsRoot),runtimeStep,coreGateway,coreRandom::nextInt,coreProgress,audit);
             ClearPresentationLifecycleStep clearPresentation=new ClearPresentationLifecycleStep(new PaperClearPresentationGateway(gameThread));

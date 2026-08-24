@@ -27,5 +27,6 @@ public interface GameLifecycleStep{
     default Set<UUID> completedCleanupPlayers(GameSession session){return Set.of();}
     default boolean hasPendingCleanup(UUID playerId){return false;}
     default GameRuntimeView runtimeView(){return GameRuntimeView.idle();}
+    default com.ryanjei.orushio.pve.pve.PveRuntimeView pveRuntimeView(){return com.ryanjei.orushio.pve.pve.PveRuntimeView.idle();}
     default com.ryanjei.orushio.pve.progression.FinalAreaProgressionView progressionView(){return com.ryanjei.orushio.pve.progression.FinalAreaProgressionView.idle();}
 }
