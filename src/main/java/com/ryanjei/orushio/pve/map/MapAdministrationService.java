@@ -36,7 +36,12 @@ public interface MapAdministrationService {
 
     record SetupEntry(BlockPoint point,Cuboid region){}
     record MarkerAreaView(String areaId,String label,int markerCount,List<SpawnMarker> markers){}
-    record MarkerTypeView(SetupMarkerType markerType,String label,int markerCount,List<SetupMarker> markers){}
+    record MarkerTypeView(SetupMarkerType markerType,String label,int markerCount,List<SetupMarker> markers){
+        public int enabledCount(){return (int)markers.stream().filter(SetupMarker::enabled).count();}
+        public Integer requiredCount(){return MapProfile.REQUIRED_MARKERS.get(markerType);}
+        public boolean exact(){return markerType==SetupMarkerType.INITIAL_RESPAWN;}
+        public boolean complete(){Integer required=requiredCount();return required==null||(exact()?enabledCount()==required:enabledCount()>=required);}
+    }
     record SetupRecoveryView(boolean recoveryRequired,String mapId,String administrator,String sessionId,String worldName,boolean safeToRecover,String warning){public static SetupRecoveryView none(){return new SetupRecoveryView(false,"","","","",false,"");}}
     record SetupView(boolean active,String mapId,String displayName,String administrator,String selectedField,boolean area,List<String> missing,Map<String,Integer> counts,Map<String,List<SetupEntry>> entries,List<MarkerAreaView> markerAreas,List<MarkerTypeView> setupMarkerTypes,long revision){
         public SetupView(boolean active,String mapId,String displayName,String administrator,String selectedField,boolean area,List<String> missing,Map<String,Integer>counts,Map<String,List<SetupEntry>>entries){this(active,mapId,displayName,administrator,selectedField,area,missing,counts,entries,List.of(),List.of(),0);}
